@@ -1,10 +1,7 @@
 from stmpy import Machine, Driver
-
 import pyaudio
 import wave
-
 from appJar import gui
-
 
 class Recorder:
     def __init__(self):
@@ -95,13 +92,13 @@ class Recorder:
         # Read data in chunks
         data = wf.readframes(chunk)
         # Play the sound by writing the audio data to the stream
-        while data != '':
+        while data != b'':
             stream.write(data)
             data = wf.readframes(chunk)
-        # Close and terminate the stream
+
+        # Close and terminate the stream and the PortAudio interface
         stream.close()
         p.terminate()
-
 
 if __name__ == "__main__":
     recorder = Recorder()

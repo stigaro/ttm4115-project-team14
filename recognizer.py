@@ -14,17 +14,16 @@ class Recognizer:
         try:
             print("[RECOGNIZE]: Recognizing audio")
 
-            with sr.AudioFile('output.wav') as audio_source:
+            with sr.AudioFile(self.audio_file_name) as audio_source:
                 audio = self.speech_converter.listen(audio_source)
-
-            self.latest_recognition = "[MESSAGE]:" + self.speech_converter.recognize_google(audio)
+            self.latest_recognition = "[MESSAGE]: " + self.speech_converter.recognize_google(audio)
 
         except FileNotFoundError:
             print('[RECOGNIZE]: Was unable to recognize')
-            self.latest_recognition = "[ERROR]:" + "Could not load audio file"
+            self.latest_recognition = "[ERROR]: " + "Could not load audio file"
         except Exception:
             print('[RECOGNIZE]: Was unable to recognize')
-            self.latest_recognition = "[ERROR]:" + "General internal error"
+            self.latest_recognition = "[ERROR]: " + "General internal error"
 
         # Standardize to lowercase and return that we are done
         self.latest_recognition = self.latest_recognition.lower()

@@ -17,4 +17,5 @@ https://github.com/falkr/stmpy-notebooks
 pip install appjar
 pip install stmpy
 pip install PyAudio
+pip install SpeechRecognition
 ```
