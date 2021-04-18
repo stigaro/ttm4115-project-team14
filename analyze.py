@@ -1,6 +1,8 @@
 from os import system
 #from stmpy import Machine, Driver
 
+
+#hallo endring
 def analyzeInput(input):
     command = input.split() #splitter alle ordene, Første ord blir keyword, input[0]
     if command[0]=="play":
