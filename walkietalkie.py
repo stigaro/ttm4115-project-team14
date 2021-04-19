@@ -4,14 +4,17 @@ from win32com.client import Dispatch
 from recorder import Recorder
 
 import paho.mqtt.client as mqtt
+from uuid import uuid4
+from base64 import b64encode
 
 # TODO: choose proper MQTT broker address
 MQTT_BROKER = 'mqtt.item.ntnu.no'
 MQTT_PORT = 1883
 
 # TODO: choose proper topics for communication
-MQTT_TOPIC_INPUT = 'ttm4115/team_14/walkietalkie'
-MQTT_TOPIC_OUTPUT = 'ttm4115/team_14/server'
+MQTT_TOPIC_BASE = 'ttm4115/team_14/'
+MQTT_TOPIC_INPUT = 'ttm4115/team_14/'
+MQTT_TOPIC_OUTPUT = 'ttm4115/team_14/command'
 
 class MQTT_Client:
     def __init__(self):
@@ -22,6 +25,7 @@ class MQTT_Client:
 
     def on_connect(self, client, userdata, flags, rc):
         print("on_connect(): {}".format(mqtt.connack_string(rc)))
+        self.stm_driver.send("register",stm_id="Christopher_walkie_talkie") # TODO: generalize this
 
     def on_message(self, client, userdata, msg):
         print("on_message(): topic: {}".format(msg.topic))
@@ -33,8 +37,6 @@ class MQTT_Client:
         print("Connecting to {}:{}".format(broker, port))
         self.client.connect(broker, port)
 
-        self.client.subscribe(MQTT_TOPIC_INPUT)
-
         try:
             # line below should not have the () after the function!
             thread = Thread(target=self.client.loop_forever)
@@ -45,20 +47,33 @@ class MQTT_Client:
             
 class WalkieTalkie:
     def __init__(self):
-        self.recording_filepath = 'output.wav'
+        self.recorder = Recorder()
+        self.uuid = uuid4().hex
+        self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
     def on_init(self):
-        print("Entering listening state...")
+        self.mqtt_client.subscribe(self.channel)
+        print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
         
     def text_to_speak(self, text):
         speak = Dispatch("SAPI.SpVoice")
         speak.Speak('{}'.format(text))
+
+    def register(self):
+        msg = {
+            "command":"register",
+            "uuid":self.uuid,
+            "name":self.name
+        }
+        json_msg = json.dumps(msg)
+        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
+
         
     def start_recording(self):
-        pass
+        self.recorder.record()
     
     def stop_recording(self):
-        pass
+        self.recorder.stop()
         
     def check_message(self):
         pass
@@ -67,7 +82,17 @@ class WalkieTalkie:
         pass
     
     def send_data(self):
-        pass
+        filename = self.recorder.filename
+        byte_data = open(filename, 'rb')
+        data = b64encode(byte_data)
+        msg = {
+            "device_id_from":self.uuid,
+            "device_owner_name_to":"recipient",
+            "command":"message",
+            "data":data
+        }
+        json_msg = json.dumps(msg)
+        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
     
     def speak_recipient_not_found(self):
         msg = "Could not find recipient. Please try again."
@@ -93,55 +118,62 @@ class WalkieTalkie:
 
     
 ######## TRANSITIONS
+## syntax t[from][to] (state number)
+
 t0 = {"source": "initial",
       "target": "listening",
       "effect": "on_init"}
 
-t1 = {
+t11 = {"source": "listening",
+      "target": "listening",
+      "trigger": "register",
+      "effect": "register()"}
+
+t12 = {
     "source":"listening",
     "target":"record_message",
     "trigger":"talking",
     "effect":"start_recording"
 }
-t2 = {
+t22 = {
     "source":"record_message",
     "target":"record_message",
     "trigger":"talking"
 }
-t3 = {
+t23 = {
     "source":"record_message",
     "target":"processing",
     "trigger":"t",
 }
-t3 = {
+t34 = {
     "source":"processing",
     "target":"send",
-    "trigger":"message_processed",
+    "trigger":"done",
 }
-t4 = {
+t351 = {
     "source":"processing",
     "target":"exception",
     "trigger":"recipient_not_found",
     "effect":"speak_recipient_not_found"
 }
-t5 = {
+t352 = {
     "source":"processing",
     "target":"exception",
     "trigger":"empty_message",
     "effect":"speak_empty_message"
 }
-t6 = {
+t45 = {
     "source":"send",
     "target":"exception",
     "trigger":"time_out",
     "effect":"speak_no_ack_received"
 }
-t6 = {
+t51 = {
     "source":"exception",
     "target":"listening",
     "trigger":"error_done"
 }
-t7 = {
+t41 = {
     "source":"send",
     "target":"listening",
     "trigger":"ack",
@@ -150,13 +182,16 @@ t7 = {
 
 transitions = [
     t0,
-    t1,
-    t2,
-    t3,
-    t4,
-    t5,
-    t6,
-    t7
+    t11,
+    t12,
+    t22,
+    t23,
+    t34,
+    t351,
+    t352,
+    t45,
+    t51,
+    t41
 ]
 
 ######## STATES
@@ -192,7 +227,8 @@ states = [
 ]
 
 walkie_talkie = WalkieTalkie()
-walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=walkie_talkie, name="walkie_talkie")
+walkie_talkie.name = "Christopher"
+walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=walkie_talkie, name="{}_walkie_talkie".format(walkie_talkie.name))
 walkie_talkie.stm = walkie_talkie_machine
 
 driver = Driver()
