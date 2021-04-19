@@ -1,9 +1,10 @@
 from stmpy import Machine, Driver
 from os import system
-import pyttsx3
-import logging
 from gtts import gTTS
-from playsound import playsound
+from pydub import AudioSegment
+import logging
+import pyaudio
+import wave
 
 debug_level = logging.DEBUG
 logger = logging.getLogger('stmpy')
@@ -15,14 +16,40 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 class Speaker:
+    def __init__(self):
+        self.audio_file_name = "string"
+
     def speak(self, string):
+        # TTS
         tts = gTTS(string, lang="en")
-        tts.save('string.mp3')
-        playsound("string.mp3")
-        #engine = pyttsx3.init()
-        #engine.say(string)
-        #engine.runAndWait()
-        #system('say {}'.format(string))
+        tts.save(self.audio_file_name+'.mp3')
+        # Convert .mp3 to .wav using ffmpeg
+        sound = AudioSegment.from_mp3(self.audio_file_name+'.mp3')
+        sound.export(self.audio_file_name+'.wav', format="wav")
+        
+        # Play the .wav file using PyAudio
+        filename = self.audio_file_name+'.wav'
+        # Set chunk size of 1024 samples per data frame
+        chunk = 1024  
+        # Open the sound file 
+        wf = wave.open(filename, 'rb')
+        # Create an interface to PortAudio
+        p = pyaudio.PyAudio()
+        # Open a .Stream object to write the WAV file to
+        # 'output = True' indicates that the sound will be played rather than recorded
+        stream = p.open(format = p.get_format_from_width(wf.getsampwidth()),
+                        channels = wf.getnchannels(),
+                        rate = wf.getframerate(),
+                        output = True)
+        # Read data in chunks
+        data = wf.readframes(chunk)
+        # Play the sound by writing the audio data to the stream
+        while data != b'':
+            stream.write(data)
+            data = wf.readframes(chunk)
+        # Close and terminate the stream
+        stream.close()
+        p.terminate()
 
 speaker = Speaker()
 
