@@ -1,6 +1,7 @@
 from threading import Thread
 from stmpy import Driver, Machine
 from win32com.client import Dispatch
+from recorder import Recorder
 
 import paho.mqtt.client as mqtt
 
@@ -24,9 +25,7 @@ class MQTT_Client:
 
     def on_message(self, client, userdata, msg):
         print("on_message(): topic: {}".format(msg.topic))
-        
-        json = json.dumps(msg)
-        json["msg"] 
+
         self.stm_driver.send("message", msg.payload)
 
     def start(self, broker, port):
@@ -45,6 +44,9 @@ class MQTT_Client:
             self.client.disconnect()
             
 class WalkieTalkie:
+    def __init__(self):
+        self.recording_filepath = 'output.wav'
+
     def on_init(self):
         print("Entering listening state...")
         
