@@ -120,15 +120,17 @@ class WalkieTalkie:
 ######## TRANSITIONS
 ## syntax t[from][to] (state number)
 
-t0 = {"source": "initial",
-      "target": "listening",
-      "effect": "on_init"}
-
-t11 = {"source": "listening",
-      "target": "listening",
-      "trigger": "register",
-      "effect": "register()"}
-
+t0 = {
+    "source": "initial",
+    "target": "listening",
+    "effect": "on_init"
+}
+t11 = {
+    "source": "listening",
+    "target": "listening",
+    "trigger": "register",
+    "effect": "register"
+}
 t12 = {
     "source":"listening",
     "target":"record_message",
