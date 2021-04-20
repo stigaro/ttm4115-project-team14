@@ -12,7 +12,6 @@ MQTT_PORT = 1883
 MQTT_TOPIC_INPUT = 'ttm4115/team_14/command'
 MQTT_TOPIC_OUTPUT = 'ttm4115/team_14/'
 
-
 class ServerStm:
     def __init__(self, name, payload, component):
         self._logger = logging.getLogger(__name__)
@@ -22,6 +21,7 @@ class ServerStm:
         self.response_message = "";
         self.mqtt_topic_output = MQTT_TOPIC_OUTPUT;
         self.handling_success = True
+        self.wtlog_filename = 'wtlog.json'
 
     def started(self):
         self._logger.debug("")
@@ -37,6 +37,8 @@ class ServerStm:
             self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_id_to') and self.payload.get('data');
         elif command == "replay":
             self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_id_to');
+        elif command == "register":
+            self.handling_success = self.payload.get('uuid') and self.payload.get('name');
         else:
             self.handling_success = False
         # Trigger finished_handling
@@ -84,7 +86,29 @@ class ServerStm:
                 payload = {"device_id_from": sender, "device_id_to": receiver, "data": data.decode()}
                 self.response_message = json.dumps(payload)
                 self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
+            elif command == "register": # {"uuid": uuid, "name": name, "command": "register"}
+                # Get uuid and name from request
+                uuid = self.payload.get("uuid")
+                name = self.payload.get("name")
+                # Retrieve all saved WTs
+                exists = False
+                data = {}
+                # Read from log file
+                with open(self.wtlog_filename, 'r') as json_file:
+                    data = json.load(json_file)
+                    if data.get('uuid',0):
+                        exists = True
+                        self._logger.debug(f'Found')
+                    self._logger.info(f'{data}')
+                # Register uuid and name if not exist in log
+                if not exists:
+                    data[uuid] = name
+                    with open(self.wtlog_filename, 'w') as outfile:
+                        json.dump(data, outfile, indent=2)
+                    self._logger.info(f'Registering new user {uuid} with name: {name}')
+                    
         except:
+            raise
             self.handling_success = False;
             return self.stm.send('response_failed')
         self.stm.send('response_built')
