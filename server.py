@@ -34,9 +34,9 @@ class ServerStm:
         command = self.payload.get('command')
         # Check for command validity
         if command == "message":
-            self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_id_to') and self.payload.get('data');
+            self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_owner_name_to') and self.payload.get('data');
         elif command == "replay":
-            self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_id_to');
+            self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_owner_name_to');
         elif command == "register":
             self.handling_success = self.payload.get('uuid') and self.payload.get('name');
         else:
@@ -52,16 +52,32 @@ class ServerStm:
         else:
             self._logger.debug("[Server]: denied - transitioning to Send")
             return 'send';
-    
+
+    def get_receiver_uuid(self, receiver_name):
+        try:
+            with open(self.wtlog_filename, 'r') as json_file:
+                data = json.load(json_file)
+                self._logger.info(f'{data}')
+                for uuid, name in data.items():
+                    if name == receiver_name:
+                        return uuid
+        except:
+            self._logger.debug(f'Error loading the walkie talkie log file!')
+        return ""
+
     def build_response(self):
         self._logger.debug("[Server]: building response...")
         command = self.payload.get('command')
         try:
-            if command == "message": # {"device_id_from": 1, "device_id_to": 2, "command" : "message", "data": "b64encoded data"}
+            if command == "message": # {"device_id_from": 1, "device_owner_name_to": name, "command" : "message", "data": "b64encoded data"}
                 # Get sender
                 sender = self.payload.get('device_id_from')
                 # Get receiver
-                receiver = self.payload.get('device_id_to')
+                receiver_name = self.payload.get('device_owner_name_to')
+                # Get receiver uuid
+                receiver = self.get_receiver_uuid(receiver_name)
+                if receiver == "":
+                    raise ValueError('uuid not found')
                 # Save message to database
                 data = self.payload.get('data')
                 self._logger.debug(f'{sender}, {receiver}, {data}')
@@ -73,11 +89,15 @@ class ServerStm:
                 payload = {"device_id_from": sender, "device_id_to": receiver, "data": data}
                 self.response_message = json.dumps(payload)
                 self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(receiver)
-            elif command == "replay": # {"device_id_from": 1, "device_id_to": 2, "command" : "replay"}
+            elif command == "replay": # {"device_id_from": 1, "device_owner_name_to": name, "command" : "replay"}
                 # Get sender
                 sender = self.payload.get('device_id_from')
                 # Get receiver
-                receiver = self.payload.get('device_id_to')
+                receiver_name = self.payload.get('device_owner_name_to')
+                # Get receiver uuid
+                receiver = self.get_receiver_uuid(receiver_name)
+                if receiver == "":
+                    raise ValueError('uuid not found')
                 # Retreive message from database
                 wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
                 self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
@@ -106,6 +126,7 @@ class ServerStm:
                     with open(self.wtlog_filename, 'w') as outfile:
                         json.dump(data, outfile, indent=2)
                     self._logger.info(f'Registering new user {uuid} with name: {name}')
+                self.get_receiver_uuid("bob ross")
                     
         except:
             raise
