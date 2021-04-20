@@ -14,47 +14,132 @@ MQTT_TOPIC_OUTPUT = 'ttm4115/team_14/'
 
 
 class ServerStm:
-    # TODO: fix this
-    def __init__(self, name, duration, component):
+    def __init__(self, name, payload, component):
         self._logger = logging.getLogger(__name__)
         self.name = name
-        self.duration = duration
         self.component = component
+        self.payload = payload;
+        self.response_message = "";
+        self.mqtt_topic_output = MQTT_TOPIC_OUTPUT;
+        self.handling_success = True
 
     def started(self):
-        self.stm.start_timer('t', self.duration * 1000)
-        self._logger.debug('New timer {} with duration {} started.'
-                           .format(self.name, self.duration))
+        self._logger.debug("")
+        self._logger.debug("[Server]: started...")
+        if self.payload:
+            self.stm.send('incoming_request')
 
-    def timer_completed(self):
-        self._logger.debug('Timer {} expired.'.format(self.name))
+    def handle_request(self):
+        self._logger.debug("[Server]: handling request...")
+        command = self.payload.get('command')
+        # Check for command validity
+        if command == "message":
+            self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_id_to') and self.payload.get('data');
+        elif command == "replay":
+            self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_id_to');
+        else:
+            self.handling_success = False
+        # Trigger finished_handling
+        self.stm.send('finished_handling')
+
+    def handle_compound_transition(self):
+        self._logger.debug("[Server]: finished handling...")
+        if self.handling_success:
+            self._logger.debug("[Server]: accepted - transitioning to Build")
+            return 'build'
+        else:
+            self._logger.debug("[Server]: denied - transitioning to Send")
+            return 'send';
+    
+    def build_response(self):
+        self._logger.debug("[Server]: building response...")
+        command = self.payload.get('command')
+        try:
+            if command == "message": # {"device_id_from": 1, "device_id_to": 2, "command" : "message", "data": "b64encoded data"}
+                # Get sender
+                sender = self.payload.get('device_id_from')
+                # Get receiver
+                receiver = self.payload.get('device_id_to')
+                # Save message to database
+                data = self.payload.get('data')
+                self._logger.debug(f'{sender}, {receiver}, {data}')
+                wf = base64.b64decode(data)
+                with open(f'stored_messages/{sender}-{receiver}.wav', 'wb') as fil:
+                    fil.write(wf)
+                    self._logger.debug(f'Message saved to /stored_messages/{sender}-{receiver}.wav')
+                # Send to receiver
+                payload = {"device_id_from": sender, "device_id_to": receiver, "data": data}
+                self.response_message = json.dumps(payload)
+                self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(receiver)
+            elif command == "replay": # {"device_id_from": 1, "device_id_to": 2, "command" : "replay"}
+                # Get sender
+                sender = self.payload.get('device_id_from')
+                # Get receiver
+                receiver = self.payload.get('device_id_to')
+                # Retreive message from database
+                wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
+                self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
+                data = base64.b64encode(wf.read())
+                # Send message to receiver
+                payload = {"device_id_from": sender, "device_id_to": receiver, "data": data.decode()}
+                self.response_message = json.dumps(payload)
+                self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
+        except:
+            self.handling_success = False;
+            return self.stm.send('response_failed')
+        self.stm.send('response_built')
+
+    def send_message(self):
+        if self.handling_success:
+            self._logger.debug("[Server]: response message sent")
+            self.component.mqtt_client.publish(self.mqtt_topic_output, self.response_message) 
+        else:
+            self._logger.error("[Server]: error message sent")
+        # Terminates the stm
         self.stm.terminate()
-
-    def report_status(self):
-        self._logger.debug('Checking timer status.'.format(self.name))
-        time = int(self.stm.get_timer('t') / 1000)
-        message = 'Timer {} has about {} seconds left'.format(self.name, time)
-        self.component.mqtt_client.publish(MQTT_TOPIC_OUTPUT, message)
-
-    def create_machine(timer_name, duration, component):
-        timer_logic = ServerStm(name=timer_name, duration=duration, component=component)
-        t0 = {'source': 'initial',
-              'target': 'active',
-              'effect': 'started'}
+        
+    def create_machine(server_name, payload, component):
+        server_logic = ServerStm(server_name, payload, component)
+        # regular transitions
+        t0 = {
+            'source': 'initial',
+            'target': 'passive',
+            'effect': 'started'}
         t1 = {
-            'source': 'active',
-            'target': 'completed',
-            'trigger': 't',
-            'effect': 'timer_completed'}
+            'source': 'passive',
+            'target': 'handle',
+            'trigger': 'incoming_request',
+            'effect': 'handle_request'}
+        # compound transition
         t2 = {
-            'source': 'active',
-            'trigger': 'report',
-            'target': 'active',
-            'effect': 'report_status'}
-        timer_stm = stmpy.Machine(name=timer_name, transitions=[t0, t1, t2],
-                                  obj=timer_logic)
-        timer_logic.stm = timer_stm
-        return timer_stm
+            'source':'handle',
+            'trigger':'finished_handling',
+            'targets': 'send build',
+            'function': server_logic.handle_compound_transition}
+        # regular transitions
+        t3 = {
+            'source': 'send',
+            'trigger': 'message_sent',
+            'target': 'passive'}
+        t4 = {
+            'source': 'build',
+            'trigger': 'response_built',
+            'target': 'send'}
+        t5 = {
+            'source': 'build',
+            'trigger': 'response_failed',
+            'target': 'send'}
+        # states
+        s0 = {
+            'name': 'build',
+            'entry': 'build_response'}
+        s1 = {
+            'name': 'send',
+            'entry': 'send_message'}
+        server_stm = stmpy.Machine(name=server_name, transitions=[t0,t1,t2,t3,t4,t5], states=[s0,s1],
+                                  obj=server_logic)
+        server_logic.stm = server_stm
+        return server_stm
 
 class Server:
     def on_connect(self, client, userdata, flags, rc):
@@ -62,47 +147,19 @@ class Server:
 
     def on_message(self, client, userdata, msg):
         self._logger.debug('Incoming message to topic {}'.format(msg.topic))
-        # self._logger.debug('Payload is {}'.format(msg.payload))
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
         except Exception as err:
             self._logger.error('Message sent to topic {} had no valid JSON. Message ignored. {}'.format(msg.topic, err))
             return
         command = payload.get('command')
-        self._logger.debug('Command in message is {}'.format(command))
-        if command == "message": # {"device_id_from": 1, "device_id_to": 2, "command" : "message", "data": "b64encoded data"}
-            # Get sender
-            sender = payload.get('device_id_from')
-            # Get receiver
-            receiver = payload.get('device_id_to')
-            # Save message to database
-            data = payload.get('data')
-            wf = base64.b64decode(data)
-            with open(f'stored_messages/{sender}-{receiver}.wav', 'wb') as fil:
-                fil.write(wf)
-                self._logger.debug(f'Message saved to /stored_messages/{sender}-{receiver}.wav')
-            # Send to receiver
-            payload = {"device_id_from": sender, "device_id_to": receiver, "data": data}
-            self.mqtt_client.publish(MQTT_TOPIC_OUTPUT+str(receiver), json.dumps(payload))
-            self._logger.debug(f'Message sent to {receiver}!')
-        elif command == "replay": # {"device_id_from": 1, "device_id_to": 2, "command" : "replay"}
-            # Get sender
-            sender = payload.get('device_id_from')
-            # Get receiver
-            receiver = payload.get('device_id_to')
-            # Retreive message from database
-            wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
-            data = base64.b64encode(wf.read())
-            # print(data)
-            # Send message to receiver
-            payload = {"device_id_from": sender, "device_id_to": receiver, "data": data.decode()}
-            self.mqtt_client.publish(MQTT_TOPIC_OUTPUT+str(sender), json.dumps(payload))
-            self._logger.debug(f'Message replayed to {sender}!')
-        else:
-            self._logger.error('Unknown command {}. Message ignored.'.format(command))
-        # timer_name = payload.get('name')
-        # print(type(self))
-        # self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, s)
+        self._logger.debug('Command in message is "{}"'.format(command))
+
+        # Create stm logic for every message request
+        server_stm = ServerStm.create_machine("server"+str(len(self.stm_driver._stms_by_id)), payload, self)
+        # Adds the machine to the driver to start it
+        self.stm_driver.add_machine(server_stm)
+        return;
 
     def __init__(self):
         # get the logger object for the component
