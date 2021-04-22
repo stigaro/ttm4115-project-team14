@@ -2,6 +2,7 @@ from threading import Thread
 from stmpy import Driver, Machine
 from win32com.client import Dispatch
 from recorder import Recorder
+from recognizer import recognize
 
 import paho.mqtt.client as mqtt
 from uuid import uuid4
@@ -55,7 +56,7 @@ class WalkieTalkie:
         self.mqtt_client.subscribe(self.channel)
         print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
         
-    def text_to_speak(self, text):
+    def text_to_speach(self, text):
         speak = Dispatch("SAPI.SpVoice")
         speak.Speak('{}'.format(text))
 
@@ -76,8 +77,18 @@ class WalkieTalkie:
         self.recorder.stop()
         
     def check_message(self):
-        pass
-    
+        msg = self.recognizer.recognize()
+        if len(msg) < 2:
+            self.speak_empty_message()
+        else:
+            #check if the message does not contain any normal words, if so, we call it empty
+            usual_words = ["hello", "help", "thanks"] #liste med ofte brukte ord, lang
+            for word in usual_words:
+                if word in msg:
+                    break
+                else:
+                    self.speak_empty_message()
+
     def reset_recording(self):
         pass
     
@@ -96,19 +107,19 @@ class WalkieTalkie:
     
     def speak_recipient_not_found(self):
         msg = "Could not find recipient. Please try again."
-        self.text_to_speek(msg)
+        self.text_to_speach(msg)
     
     def speak_empty_message(self):
         msg = "Message was empty. Please try again."
-        self.text_to_speek(msg)
+        self.text_to_speach(msg)
     
     def speak_no_ack_received(self):
         msg = "Could not connect. Please try again"
-        self.text_to_speek(msg)
+        self.text_to_speach(msg)
     
     def speak_ok(self):
         msg = "Message sent"
-        self.text_to_speek(msg)
+        self.text_to_speach(msg)
     
     def blink(self):
         print("*Intense blinking*")
