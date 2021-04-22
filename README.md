@@ -12,10 +12,12 @@ https://github.com/falkr/stmpy-notebooks
 ### Prerequisites
 - python3
 - pip
+- ffmpeg
 
 ```sh
 pip install appjar
 pip install stmpy
 pip install PyAudio
 pip install SpeechRecognition
+pip install pydub
 ```
