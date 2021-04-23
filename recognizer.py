@@ -28,6 +28,7 @@ class Recognizer:
         # Standardize to lowercase and return that we are done
         self.latest_recognition = self.latest_recognition.lower()
         self.stm.send('done')
+        return self.latest_recognition()
 
     def report(self):
         # TODO: Needs to send message, currently only prints latest recognition

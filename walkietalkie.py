@@ -3,6 +3,7 @@ from stmpy import Driver, Machine
 from recorder import Recorder
 from tts import Speaker
 import logging
+from recognizer import Recognizer
 import paho.mqtt.client as mqtt
 from uuid import uuid4
 from base64 import b64encode
@@ -62,7 +63,7 @@ class WalkieTalkie:
         self.mqtt_client.subscribe(self.channel)
         print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
         
-    def text_to_speak(self, text):
+    def text_to_speech(self, text):
         this.tts.speak(str(text))
 
     def register(self):
@@ -85,8 +86,18 @@ class WalkieTalkie:
         pass
 
     def check_message(self):
-        pass
-    
+        msg = self.Recognizer.recognize()
+        if len(msg) < 2:
+            self.speak_empty_message()
+        else:
+            #check if the message does not contain any normal words, if so, we call it empty
+            usual_words = ["hello", "help", "thanks"] #liste med ofte brukte ord, lang
+            for word in usual_words:
+                if word in msg:
+                    break
+                else:
+                    self.speak_empty_message()
+
     def reset_recording(self):
         pass
     
@@ -105,19 +116,19 @@ class WalkieTalkie:
     
     def speak_recipient_not_found(self):
         msg = "Could not find recipient. Please try again."
-        self.text_to_speek(msg)
+        self.text_to_speech(msg)
     
     def speak_empty_message(self):
         msg = "Message was empty. Please try again."
-        self.text_to_speek(msg)
+        self.text_to_speech(msg)
     
     def speak_no_ack_received(self):
         msg = "Could not connect. Please try again"
-        self.text_to_speek(msg)
+        self.text_to_speech(msg)
     
     def speak_ok(self):
         msg = "Message sent"
-        self.text_to_speek(msg)
+        self.text_to_speech(msg)
     
     def blink(self):
         print("*Intense blinking*")
