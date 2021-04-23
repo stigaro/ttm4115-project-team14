@@ -13,8 +13,7 @@ class Recorder:
         self.filename = "output.wav"
         self.p = pyaudio.PyAudio()
 
-        # Creates the appJar gui, handling the button events
-
+    # Creates the appJar gui, handling the button events
     def create_gui(self):
         self.app = gui()
 

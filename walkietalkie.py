@@ -19,7 +19,6 @@ MQTT_TOPIC_OUTPUT = 'ttm4115/team_14/command'
 
 class MQTT_Client:
     def __init__(self, component):
-        self._logger = logging.getLogger(__name__)
         self.count = 0
         self.component = component
         # callback methods
@@ -32,12 +31,12 @@ class MQTT_Client:
         self.stm.send("register")
 
     def on_message(self, client, userdata, msg):
-        self._logger.debug("on_message(): topic: {}".format(msg.topic))
+        self.component._logger.debug("on_message(): topic: {}".format(msg.topic))
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
             self.component.parse_message(payload)
         except Exception as err:
-            self._logger.error('Message sent to topic {} had no valid JSON. Message ignored. {}'.format(msg.topic, err))
+            self.component._logger.error('Message sent to topic {} had no valid JSON. Message ignored. {}'.format(msg.topic, err))
             return
 
     def start(self, broker, port):
@@ -54,7 +53,7 @@ class WalkieTalkie:
     def __init__(self, transitions, states):
         self.payload = {}
         self._logger = logging.getLogger(__name__)
-        print('logging under name {}.'.format(__name__))
+        self._logger.info('logging under name {}.'.format(__name__))
         self._logger.info('Starting Component')
 
         self.recorder = Recorder()
@@ -70,32 +69,33 @@ class WalkieTalkie:
 
         self.stm_driver = Driver()
         self.stm_driver.add_machine(walkie_talkie_machine)
-        self.stm_driver.start(keep_active=True)
+        self.stm_driver.start()
         self._logger.debug('Component initialization finished')
 
     def create_gui(self):
         self.app = gui()
 
-        def extract_timer_name(label):
+        def extract_btn_name(label):
             label = label.lower()
             if 'send <' in label:
                 return 'talking'
-            elif 'play' in label:
-                return 'play'
             elif 'replay' in label:
-                return 'replay'
+                return 'replay_message'
             elif 'next' in label:
                 return 'next'
             elif 'replay <' in label:
                 return 'replay'
+            elif 'play' in label:
+                return 'play_message'
             return None
 
         self.app.startLabelFrame('Walkie talkie')
 
         def on_button_pressed_start(title):
-            command = extract_timer_name(title)
+            command = extract_btn_name(title)
             self.stm.send(command)
             print("[ACTION]:", command)
+            print("[ACTION]:", self.stm.state)
 
         self.app.addButton('Send <name>', on_button_pressed_start)
         self.app.addButton('Play', on_button_pressed_start)
@@ -103,7 +103,6 @@ class WalkieTalkie:
         self.app.addButton('Next', on_button_pressed_start)
         self.app.addButton('Replay <name>', on_button_pressed_start)
         self.app.stopLabelFrame()
-
         self.app.go()
 
     def on_init(self):
@@ -116,11 +115,12 @@ class WalkieTalkie:
         self.mqtt_client.subscribe(self.channel)
         print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
 
-        # Create GUI
-        self.create_gui()
+        # Create GUI in a new thread
+        th = Thread(target=self.create_gui)
+        th.start()
         
     def text_to_speech(self, text):
-        this.tts.speak(str(text))
+        self.tts.speak(str(text))
 
     def register(self):
         msg = {
@@ -159,21 +159,38 @@ class WalkieTalkie:
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
         except:
             self._logger.error(f'Payload could not be read!')
-        self.play_message();
     
     def play_message(self):
-        self.recorder.play("message_queue/1.wav")
-        self.stm.send('message_played')
+        # Check queue length
+        queue_length = len(os.listdir("message_queue"))
+        if queue_length > 0:
+            self._logger.info(f'Playing message 1/{queue_length}!')
+            self.recorder.play("message_queue/1.wav")
+            self.stm.send('message_played')
+        else:
+            # self.tts_error('ok')
+            # TODO
+            pass
     
-    def replay_message(self):
-        pass
-
     def load_next_message_in_queue(self):
-        pass
+        queue_folder = "message_queue"
+        queue_length = len(os.listdir(queue_folder))
+        if queue_length > 1:
+            self.iterate_queue()
+        else:
+            # self.tts_error('no_ack_received')
+            # TODO
+            pass
+    
+    def iterate_queue(self):
+        queue_folder = "message_queue"
+        for i, filename in enumerate(os.listdir(queue_folder)):
+            if i == 0:
+                os.remove(f"{queue_folder}/{filename}")
+            else:
+                os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
 
-    def request_replay_message(self):
-        pass
-
+    
     def check_message(self):
         # Should be fixed
         msg = self.Recognizer.recognize()
@@ -201,7 +218,7 @@ class WalkieTalkie:
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
     
-    def error(exception):
+    def tts_error(self, exception):
         if exception == "recipient_not_found":
             msg = "Could not find recipient. Please try again."
         elif exception == "empty_message":
@@ -259,9 +276,21 @@ transitions = [
         "trigger": "play_message",
     },
     {
+        "source": "playing",
+        "target": "playing",
+        "trigger": "replay_message",
+    },
+    {
+        "source": "playing",
+        "target": "playing",
+        "trigger": "next",
+        "effect": "load_next_message_in_queue",
+    },
+    {
         'source': 'playing',
         'target': 'listening',
         'trigger': 'time_out',
+        'effect': 'iterate_queue',
     },
     # Record message
     {
@@ -290,19 +319,19 @@ transitions = [
         "source":"processing",
         "target":"exception",
         "trigger":"recipient_not_found",
-        "effect":"error('recipient_not_found')"
+        "effect":"tts_error('recipient_not_found')"
     },
     {
         "source":"processing",
         "target":"exception",
         "trigger":"empty_message",
-        "effect":"error('empty_message')"
+        "effect":"tts_error('empty_message')"
     },
     {
         "source":"send",
         "target":"exception",
         "trigger":"time_out",
-        "effect":"error('no_ack_received')"
+        "effect":"tts_error('no_ack_received')"
     },
     {
         "source":"exception",
@@ -313,7 +342,7 @@ transitions = [
         "source":"send",
         "target":"listening",
         "trigger":"ack",
-        "effect":"error('ok')"
+        "effect":"tts_error('ok')"
     },
 ]
 
@@ -324,14 +353,15 @@ states = [
         "name":"listening",
     },
     {
-        "name":"playing",
-        "do": "play_message(*)",
-        "message_played": "start_timer('time_out',3000)",
-    },
-    {
         "name":"receive_message",
         "do": "save_message(*)",
         "save_message": "defer",
+    },
+    {
+        "name":"playing",
+        "do": "play_message()",
+        "entry": "stop_timer('time_out')",
+        "message_played": "start_timer('time_out',3000)",
     },
     {
         "name":"record_message",
