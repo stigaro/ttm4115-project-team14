@@ -1,3 +1,4 @@
+import os
 import paho.mqtt.client as mqtt
 import logging
 import json
@@ -74,10 +75,10 @@ class WalkieTalkie:
     
     def on_init(self):
         # Create and start MQTT client on init
-        myclient = MQTT_Client(self)
-        self.mqtt_client = myclient.client # for publishing/subscribing to broker ( wt.mqtt_client.publish )
-        myclient.stm = self.stm
-        myclient.start(MQTT_BROKER, MQTT_PORT)
+        client = MQTT_Client(self)
+        self.mqtt_client = client.client # for publishing/subscribing to broker
+        client.stm = self.stm
+        client.start(MQTT_BROKER, MQTT_PORT)
 
         self.mqtt_client.subscribe(self.channel)
         print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
@@ -101,6 +102,10 @@ class WalkieTalkie:
     def stop_recording(self):
         self.recorder.stop()
 
+    def reset_recording(self):
+        # TODO
+        pass
+
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
@@ -112,7 +117,7 @@ class WalkieTalkie:
             data = base64.b64decode(wf)
             # self._logger.error(data)
             # Get queue length
-            queue_number = 1
+            queue_number = len(os.listdir("message_queue"))+1
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
@@ -121,6 +126,7 @@ class WalkieTalkie:
         pass
 
     def check_message(self):
+        # Should be fixed
         msg = self.Recognizer.recognize()
         if len(msg) < 2:
             self.speak_empty_message()
@@ -131,11 +137,8 @@ class WalkieTalkie:
                 if word in msg:
                     break
                 else:
-                    self.speak_empty_message()
+                    self.error("empty_message")
 
-    def reset_recording(self):
-        pass
-    
     def send_data(self):
         filename = self.recorder.filename
         byte_data = open(filename, 'rb')
@@ -149,21 +152,17 @@ class WalkieTalkie:
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
     
-    def speak_recipient_not_found(self):
-        msg = "Could not find recipient. Please try again."
+    def error(exception):
+        if exception == "recipient_not_found":
+            msg = "Could not find recipient. Please try again."
+        elif exception == "empty_message":
+            msg = "Message was empty. Please try again."
+        elif exception == "no_ack_received":
+            msg = "Could not connect. Please try again"
+        elif exception == "ok":
+            msg = "Message sent"
         self.text_to_speech(msg)
-    
-    def speak_empty_message(self):
-        msg = "Message was empty. Please try again."
-        self.text_to_speech(msg)
-    
-    def speak_no_ack_received(self):
-        msg = "Could not connect. Please try again"
-        self.text_to_speech(msg)
-    
-    def speak_ok(self):
-        msg = "Message sent"
-        self.text_to_speech(msg)
+        self._logger.debug(msg)
     
     def blink(self):
         print("*Intense blinking*")
