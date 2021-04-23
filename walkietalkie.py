@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import logging
 import json
 import base64
+from appJar import gui
 from recognizer import Recognizer
 from recorder import Recorder
 from stmpy import Driver, Machine
@@ -72,7 +73,39 @@ class WalkieTalkie:
         self.stm_driver.start(keep_active=True)
         self._logger.debug('Component initialization finished')
 
-    
+    def create_gui(self):
+        self.app = gui()
+
+        def extract_timer_name(label):
+            label = label.lower()
+            if 'send <' in label:
+                return 'talking'
+            elif 'play' in label:
+                return 'play'
+            elif 'replay' in label:
+                return 'replay'
+            elif 'next' in label:
+                return 'next'
+            elif 'replay <' in label:
+                return 'replay'
+            return None
+
+        self.app.startLabelFrame('Walkie talkie')
+
+        def on_button_pressed_start(title):
+            command = extract_timer_name(title)
+            self.stm.send(command)
+            print("[ACTION]:", command)
+
+        self.app.addButton('Send <name>', on_button_pressed_start)
+        self.app.addButton('Play', on_button_pressed_start)
+        self.app.addButton('Replay', on_button_pressed_start)
+        self.app.addButton('Next', on_button_pressed_start)
+        self.app.addButton('Replay <name>', on_button_pressed_start)
+        self.app.stopLabelFrame()
+
+        self.app.go()
+
     def on_init(self):
         # Create and start MQTT client on init
         client = MQTT_Client(self)
@@ -82,6 +115,9 @@ class WalkieTalkie:
 
         self.mqtt_client.subscribe(self.channel)
         print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
+
+        # Create GUI
+        self.create_gui()
         
     def text_to_speech(self, text):
         this.tts.speak(str(text))
@@ -123,6 +159,19 @@ class WalkieTalkie:
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
         except:
             self._logger.error(f'Payload could not be read!')
+        self.play_message();
+    
+    def play_message(self):
+        self.recorder.play("message_queue/1.wav")
+        self.stm.send('message_played')
+    
+    def replay_message(self):
+        pass
+
+    def load_next_message_in_queue(self):
+        pass
+
+    def request_replay_message(self):
         pass
 
     def check_message(self):
@@ -177,133 +226,132 @@ class WalkieTalkie:
         self.stm_driver.stop()
 
     
-######## TRANSITIONS
-## syntax t[from][to] (state number)
-
-t0 = {
-    "source": "initial",
-    "target": "listening",
-    "effect": "on_init"
-}
-t11 = {
-    "source": "listening",
-    "target": "listening",
-    "trigger": "register",
-    "effect": "register"
-}
-t111 = {
-    "source": "listening",
-    "target": "receive_message",
-    "trigger": "save_message",
-}
-t1111 = {
-    'source': 'receive_message',
-    'target': 'listening',
-    'trigger': 'done',
-}
-t12 = {
-    "source":"listening",
-    "target":"record_message",
-    "trigger":"talking",
-    "effect":"start_recording"
-}
-t22 = {
-    "source":"record_message",
-    "target":"record_message",
-    "trigger":"talking"
-}
-t23 = {
-    "source":"record_message",
-    "target":"processing",
-    "trigger":"t",
-}
-t34 = {
-    "source":"processing",
-    "target":"send",
-    "trigger":"done",
-}
-t351 = {
-    "source":"processing",
-    "target":"exception",
-    "trigger":"recipient_not_found",
-    "effect":"speak_recipient_not_found"
-}
-t352 = {
-    "source":"processing",
-    "target":"exception",
-    "trigger":"empty_message",
-    "effect":"speak_empty_message"
-}
-t45 = {
-    "source":"send",
-    "target":"exception",
-    "trigger":"time_out",
-    "effect":"speak_no_ack_received"
-}
-t51 = {
-    "source":"exception",
-    "target":"listening",
-    "trigger":"error_done"
-}
-t41 = {
-    "source":"send",
-    "target":"listening",
-    "trigger":"ack",
-    "effect":"speak_ok"
-}
-
+# TRANSITIONS
 transitions = [
-    t0,
-    t11,
-    t111,
-    t1111,
-    t12,
-    t22,
-    t23,
-    t34,
-    t351,
-    t352,
-    t45,
-    t51,
-    t41
+    # Initial
+    {
+        "source": "initial",
+        "target": "listening",
+        "effect": "on_init"
+    },
+    # Register
+    {
+        "source": "listening",
+        "target": "listening",
+        "trigger": "register",
+        "effect": "register"
+    },
+    # Receive message
+    {
+        "source": "listening",
+        "target": "receive_message",
+        "trigger": "save_message",
+    },
+    {
+        'source': 'receive_message',
+        'target': 'listening',
+        'trigger': 'done',
+    },
+    # Play message
+    {
+        "source": "listening",
+        "target": "playing",
+        "trigger": "play_message",
+    },
+    {
+        'source': 'playing',
+        'target': 'listening',
+        'trigger': 'time_out',
+    },
+    # Record message
+    {
+        "source":"listening",
+        "target":"record_message",
+        "trigger":"talking",
+        "effect":"start_recording"
+    },
+    {
+        "source":"record_message",
+        "target":"record_message",
+        "trigger":"talking"
+    },
+    {
+        "source":"record_message",
+        "target":"processing",
+        "trigger":"t",
+    },
+    {
+        "source":"processing",
+        "target":"send",
+        "trigger":"done",
+    },
+    # Processing and Send exceptions
+    {
+        "source":"processing",
+        "target":"exception",
+        "trigger":"recipient_not_found",
+        "effect":"error('recipient_not_found')"
+    },
+    {
+        "source":"processing",
+        "target":"exception",
+        "trigger":"empty_message",
+        "effect":"error('empty_message')"
+    },
+    {
+        "source":"send",
+        "target":"exception",
+        "trigger":"time_out",
+        "effect":"error('no_ack_received')"
+    },
+    {
+        "source":"exception",
+        "target":"listening",
+        "trigger":"error_done"
+    },
+    {
+        "source":"send",
+        "target":"listening",
+        "trigger":"ack",
+        "effect":"error('ok')"
+    },
 ]
 
-######## STATES
-listening = {
-    "name":"listening",
-}
-receive_message = {
-    "name":"receive_message",
-    "do": "save_message(*)",
-    "save_message": "defer",
-}
-record_message = {
-    "name":"record_message",
-    "entry":"start_timer('t',3000)",
-    "exit":"stop_recording"
-}
-processing = {
-    "name":"processing",
-    "entry":"check_message",
-    "exit":"reset_recording"
-}
-send = {
-    "name":"send",
-    "entry":"start_timer('time_out',5000); send_data",
-    "exit":"stop_timer('time_out')",
-}
-exception = {
-    "name":"exception",
-    "entry":"blink; vibrate"
-}
 
+# STATES
 states = [
-    listening,
-    receive_message,
-    record_message,
-    processing,
-    send,
-    exception
+    {
+        "name":"listening",
+    },
+    {
+        "name":"playing",
+        "do": "play_message(*)",
+        "message_played": "start_timer('time_out',3000)",
+    },
+    {
+        "name":"receive_message",
+        "do": "save_message(*)",
+        "save_message": "defer",
+    },
+    {
+        "name":"record_message",
+        "entry":"start_timer('t',3000)",
+        "exit":"stop_recording"
+    },
+    {
+        "name":"processing",
+        "entry":"check_message",
+        "exit":"reset_recording"
+    },
+    {
+        "name":"send",
+        "entry":"start_timer('time_out',5000); send_data",
+        "exit":"stop_timer('time_out')",
+    },
+    {
+        "name":"exception",
+        "entry":"blink; vibrate"
+    },
 ]
 
 # Logging
