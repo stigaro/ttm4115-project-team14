@@ -79,12 +79,12 @@ class WalkieTalkie:
             label = label.lower()
             if 'send <' in label:
                 return 'talking'
+            elif 'replay <' in label:
+                return 'request_replay_message'
             elif 'replay' in label:
                 return 'replay_message'
             elif 'next' in label:
                 return 'next'
-            elif 'replay <' in label:
-                return 'replay'
             elif 'play' in label:
                 return 'play_message'
             return None
@@ -145,6 +145,8 @@ class WalkieTalkie:
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
+        elif payload.get('data'):
+            self.stm.send('replay_save_message', args=[payload])
 
     def save_message(self, payload):
         try:
@@ -159,7 +161,23 @@ class WalkieTalkie:
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
         except:
             self._logger.error(f'Payload could not be read!')
-    
+
+    def play_replay_message(self, payload):
+        try:
+            # Retreive message from payload
+            wf = payload.get('data')
+            data = base64.b64decode(wf)
+            with open(f'replay_message.wav', 'wb') as fil:
+                fil.write(data)
+                self._logger.debug(f'Message saved to replay_message.wav')
+            self.recorder.play("replay_message.wav")
+            self.stm.send("replay_finished")
+        except:
+            # TODO
+            self._logger.error(f'Payload could not be read!')
+            self.stm.send("replay_finished")
+            pass
+
     def play_message(self):
         # Check queue length
         queue_length = len(os.listdir("message_queue"))
@@ -170,6 +188,7 @@ class WalkieTalkie:
         else:
             # self.tts_error('ok')
             # TODO
+            self.stm.send('message_played')
             pass
     
     def load_next_message_in_queue(self):
@@ -190,7 +209,17 @@ class WalkieTalkie:
             else:
                 os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
 
-    
+    def play_latest_user_message(self):
+        name = "bob ross"
+        uuid = self.uuid
+        msg = {
+            "device_id_from": uuid,
+            "device_owner_name_to": name,
+            "command":"replay",
+        }
+        json_msg = json.dumps(msg)
+        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
+
     def check_message(self):
         # Should be fixed
         msg = self.Recognizer.recognize()
@@ -292,6 +321,22 @@ transitions = [
         'trigger': 'time_out',
         'effect': 'iterate_queue',
     },
+    # Request replay message
+    {
+        "source": "listening",
+        "target": "replay",
+        "trigger": "request_replay_message",
+    },
+    {
+        'source': 'replay',
+        'target': 'playing_replay',
+        'trigger': 'replay_save_message',
+    },
+    {
+        'source': 'playing_replay',
+        'target': 'listening',
+        'trigger': 'replay_finished',
+    },
     # Record message
     {
         "source":"listening",
@@ -356,6 +401,15 @@ states = [
         "name":"receive_message",
         "do": "save_message(*)",
         "save_message": "defer",
+    },
+    {
+        "name":"replay",
+        "do": "play_latest_user_message()",
+    },
+    {
+        "name":"playing_replay",
+        "do": "play_replay_message(*)",
+        "replay_save_message": "defer",
     },
     {
         "name":"playing",
