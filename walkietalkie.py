@@ -1,11 +1,12 @@
 from threading import Thread
 from stmpy import Driver, Machine
-from win32com.client import Dispatch
 from recorder import Recorder
-
+from tts import Speaker
+import logging
 import paho.mqtt.client as mqtt
 from uuid import uuid4
 from base64 import b64encode
+import json
 
 # TODO: choose proper MQTT broker address
 MQTT_BROKER = 'mqtt.item.ntnu.no'
@@ -13,51 +14,56 @@ MQTT_PORT = 1883
 
 # TODO: choose proper topics for communication
 MQTT_TOPIC_BASE = 'ttm4115/team_14/'
-MQTT_TOPIC_INPUT = 'ttm4115/team_14/'
+# MQTT_TOPIC_INPUT = 'ttm4115/team_14/'
 MQTT_TOPIC_OUTPUT = 'ttm4115/team_14/command'
 
 class MQTT_Client:
     def __init__(self):
+        self._logger = logging.getLogger(__name__)
         self.count = 0
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
+        self.stm = {}
 
     def on_connect(self, client, userdata, flags, rc):
         print("on_connect(): {}".format(mqtt.connack_string(rc)))
-        self.stm_driver.send("register",stm_id="Christopher_walkie_talkie") # TODO: generalize this
+        self.stm.send("register")
 
     def on_message(self, client, userdata, msg):
-        print("on_message(): topic: {}".format(msg.topic))
-
-        self.stm_driver.send("message", msg.payload)
+        self._logger.debug("on_message(): topic: {}".format(msg.topic))
+        self.stm.send("message", msg.payload)
 
     def start(self, broker, port):
-
         print("Connecting to {}:{}".format(broker, port))
         self.client.connect(broker, port)
-
         try:
-            # line below should not have the () after the function!
             thread = Thread(target=self.client.loop_forever)
             thread.start()
         except KeyboardInterrupt:
             print("Interrupted")
             self.client.disconnect()
-            
+
 class WalkieTalkie:
     def __init__(self):
         self.recorder = Recorder()
+        self.tts = Speaker()
         self.uuid = uuid4().hex
+        self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
-
+    
     def on_init(self):
+        # Start MQTT client on init
+        myclient = MQTT_Client()
+        self.mqtt_client = myclient.client # for publishing/subscribing to broker ( wt.mqtt_client.publish )
+        myclient.stm = self.stm
+        myclient.start(MQTT_BROKER, MQTT_PORT)
+
         self.mqtt_client.subscribe(self.channel)
         print("{uuid}: listening on channel {channel}".format(uuid=self.uuid, channel=self.channel))
         
     def text_to_speak(self, text):
-        speak = Dispatch("SAPI.SpVoice")
-        speak.Speak('{}'.format(text))
+        this.tts.speak(str(text))
 
     def register(self):
         msg = {
@@ -67,14 +73,17 @@ class WalkieTalkie:
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
-
-        
+        print(self.uuid)
+ 
     def start_recording(self):
         self.recorder.record()
     
     def stop_recording(self):
         self.recorder.stop()
-        
+
+    def save_message(self):
+        pass
+
     def check_message(self):
         pass
     
@@ -130,6 +139,13 @@ t11 = {
     "target": "listening",
     "trigger": "register",
     "effect": "register"
+}
+# TODO
+t111 = {
+    "source": "listening",
+    "target": "listening",
+    "trigger": "message",
+    "effect": "save_message"
 }
 t12 = {
     "source":"listening",
@@ -228,6 +244,16 @@ states = [
     exception
 ]
 
+# Logging
+debug_level = logging.DEBUG
+logger = logging.getLogger(__name__)
+logger.setLevel(debug_level)
+ch = logging.StreamHandler()
+ch.setLevel(debug_level)
+formatter = logging.Formatter('%(asctime)s - %(name)-12s - %(levelname)-8s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 walkie_talkie = WalkieTalkie()
 walkie_talkie.name = "Christopher"
 walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=walkie_talkie, name="{}_walkie_talkie".format(walkie_talkie.name))
@@ -236,9 +262,4 @@ walkie_talkie.stm = walkie_talkie_machine
 driver = Driver()
 driver.add_machine(walkie_talkie_machine)
 
-myclient = MQTT_Client()
-walkie_talkie.mqtt_client = myclient.client # for publishing/subscribing to broker ( wt.mqtt_client.publish )
-myclient.stm_driver = driver # for sending messages to stm ( stm_driver.send(msg, payload) )
-
 driver.start()
-myclient.start(MQTT_BROKER, MQTT_PORT)

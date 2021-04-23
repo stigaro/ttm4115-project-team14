@@ -51,24 +51,25 @@ class Speaker:
         stream.close()
         p.terminate()
 
-speaker = Speaker()
+if __name__ == "__main__":
+    speaker = Speaker()
 
-t0 = {'source': 'initial', 'target': 'ready'}
-t1 = {'trigger': 'speak', 'source': 'ready', 'target': 'speaking'}
-t2 = {'trigger': 'done', 'source': 'speaking', 'target': 'ready'}
+    t0 = {'source': 'initial', 'target': 'ready'}
+    t1 = {'trigger': 'speak', 'source': 'ready', 'target': 'speaking'}
+    t2 = {'trigger': 'done', 'source': 'speaking', 'target': 'ready'}
 
-s1 = {'name': 'speaking', 'do': 'speak(*)', 'speak': 'defer'}
+    s1 = {'name': 'speaking', 'do': 'speak(*)', 'speak': 'defer'}
 
-stm = Machine(name='stm', transitions=[t0, t1, t2], states=[s1], obj=speaker)
-speaker.stm = stm
+    stm = Machine(name='stm', transitions=[t0, t1, t2], states=[s1], obj=speaker)
+    speaker.stm = stm
 
-driver = Driver()
-driver.add_machine(stm)
-driver.start()
+    driver = Driver()
+    driver.add_machine(stm)
+    driver.start()
 
-driver.send('speak', 'stm', args=['My first sentence.'])
-driver.send('speak', 'stm', args=['My second sentence.'])
-driver.send('speak', 'stm', args=['My third sentence.'])
-driver.send('speak', 'stm', args=['My fourth sentence.'])
+    driver.send('speak', 'stm', args=['My first sentence.'])
+    driver.send('speak', 'stm', args=['My second sentence.'])
+    driver.send('speak', 'stm', args=['My third sentence.'])
+    driver.send('speak', 'stm', args=['My fourth sentence.'])
 
-driver.wait_until_finished()
+    driver.wait_until_finished()
