@@ -5,6 +5,7 @@ from threading import Thread
 import json
 import wave
 import base64
+import os
 
 MQTT_BROKER = 'mqtt.item.ntnu.no'
 MQTT_PORT = 1883
@@ -99,6 +100,8 @@ class ServerStm:
                 if receiver == "":
                     raise ValueError('uuid not found')
                 # Retreive message from database
+                if not os.path.exists(f"stored_messages/{receiver}-{sender}.wav"):
+                    raise ValueError('Stored replay message not found!')
                 wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
                 self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
                 data = base64.b64encode(wf.read())
@@ -128,8 +131,9 @@ class ServerStm:
                     self._logger.info(f'Registering new user {uuid} with name: {name}')
                 self.get_receiver_uuid("bob ross")
                     
-        except:
-            raise
+        except Exception as e:
+            # raise
+            self._logger.error(e)
             self.handling_success = False;
             return self.stm.send('response_failed')
         self.stm.send('response_built')
