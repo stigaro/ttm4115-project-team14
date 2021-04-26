@@ -4,7 +4,7 @@ import logging
 import json
 import base64
 from appJar import gui
-from recognizer import Recognizer
+from recognizer import get_state_machine
 from recorder import Recorder
 from stmpy import Driver, Machine
 from threading import Thread
@@ -58,17 +58,22 @@ class WalkieTalkie:
 
         self.recorder = Recorder()
         self.tts = Speaker()
+        # self.recognizer = Recognizer()
 
         self.uuid = uuid4().hex
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
         self.name = "Christopher"
-        walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name="{}_walkie_talkie".format(self.name))
+        stm_walkie_talkie_name = "{}_walkie_talkie".format(self.name)
+        walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name=stm_walkie_talkie_name)
         self.stm = walkie_talkie_machine
+
+        recognizer_stm = get_state_machine('stm_recognizer', [stm_walkie_talkie_name])
 
         self.stm_driver = Driver()
         self.stm_driver.add_machine(walkie_talkie_machine)
+        self.stm_driver.add_machine(recognizer_stm)
         self.stm_driver.start()
         self._logger.debug('Component initialization finished')
 
@@ -131,15 +136,24 @@ class WalkieTalkie:
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
+
+    def query_server(self, recipient):
+        msg = {
+            "command":"query",
+            "recipient":recipient
+        }
+        json_msg = json.dumps(msg)
+        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
  
-    def start_recording(self):
+    def start_recording(self, args):
+        print(args["recognition_string"])
         self.recorder.record()
     
     def stop_recording(self):
         self.recorder.stop()
 
     def reset_recording(self):
-        # TODO
+        # TODO Fjerne denne? Vet ikke helt hva den er til...
         pass
 
     def parse_message(self, payload):
@@ -221,7 +235,12 @@ class WalkieTalkie:
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
 
     def check_message(self):
-        # Should be fixed
+        # TODO should be fixed
+        if "message was ok":
+            self.stm.send('message_ok')
+        else:
+            self.stm.send('empty_message')
+        '''
         msg = self.Recognizer.recognize()
         if len(msg) < 2:
             self.speak_empty_message()
@@ -233,11 +252,12 @@ class WalkieTalkie:
                     break
                 else:
                     self.error("empty_message")
+        '''
 
     def send_data(self):
         filename = self.recorder.filename
         byte_data = open(filename, 'rb')
-        data = b64encode(byte_data)
+        data = base64.b64encode(byte_data)
         msg = {
             "device_id_from":self.uuid,
             "device_owner_name_to":"recipient",
@@ -279,13 +299,6 @@ transitions = [
         "source": "initial",
         "target": "listening",
         "effect": "on_init"
-    },
-    # Register
-    {
-        "source": "listening",
-        "target": "listening",
-        "trigger": "register",
-        "effect": "register"
     },
     # Receive message
     {
@@ -340,28 +353,24 @@ transitions = [
     # Record message
     {
         "source":"listening",
-        "target":"record_message",
-        "trigger":"talking",
-        "effect":"start_recording"
+        "target":"check_recipient",
+        "trigger":"send",
     },
     {
-        "source":"record_message",
+        "source":"check_recipient",
         "target":"record_message",
-        "trigger":"talking"
-    },
-    {
-        "source":"record_message",
-        "target":"processing",
-        "trigger":"t",
+        "trigger":"recipient_ok",
+        "effect":"start_recording(*)"
     },
     {
         "source":"processing",
-        "target":"send",
-        "trigger":"done",
+        "target":"listening",
+        "trigger":"message_ok",
+        "effect":"send_data; tts_error('ok')"
     },
     # Processing and Send exceptions
     {
-        "source":"processing",
+        "source":"check_recipient",
         "target":"exception",
         "trigger":"recipient_not_found",
         "effect":"tts_error('recipient_not_found')"
@@ -373,21 +382,9 @@ transitions = [
         "effect":"tts_error('empty_message')"
     },
     {
-        "source":"send",
-        "target":"exception",
-        "trigger":"time_out",
-        "effect":"tts_error('no_ack_received')"
-    },
-    {
         "source":"exception",
         "target":"listening",
         "trigger":"error_done"
-    },
-    {
-        "source":"send",
-        "target":"listening",
-        "trigger":"ack",
-        "effect":"tts_error('ok')"
     },
 ]
 
@@ -396,11 +393,16 @@ transitions = [
 states = [
     {
         "name":"listening",
+        "register":"register()"
     },
     {
         "name":"receive_message",
         "do": "save_message(*)",
         "save_message": "defer",
+    },
+    {
+        "name":"check_recipient",
+        "entry":"query_server(*)"
     },
     {
         "name":"replay",
@@ -418,19 +420,9 @@ states = [
         "message_played": "start_timer('time_out',3000)",
     },
     {
-        "name":"record_message",
-        "entry":"start_timer('t',3000)",
-        "exit":"stop_recording"
-    },
-    {
         "name":"processing",
         "entry":"check_message",
         "exit":"reset_recording"
-    },
-    {
-        "name":"send",
-        "entry":"start_timer('time_out',5000); send_data",
-        "exit":"stop_timer('time_out')",
     },
     {
         "name":"exception",

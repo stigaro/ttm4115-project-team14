@@ -26,10 +26,10 @@ class Recognizer:
         print("[OBSERVER_UPDATE]: '{}'".format(recognition_string))
         for stm_observer in self.stm_observers:
             try:
-                self.stm.driver.send('adressed', stm_observer, args={
+                self.stm.driver.send('adressed', stm_observer, args=[{
                     'recognition_word': self.recognition_word,
                     'recognition_string': recognition_string
-                })
+                }])
             except Exception:
                 print("WARNING; Recognizer raised exception when sending to observer")
                 continue  # We ignore any exceptions.
@@ -60,6 +60,23 @@ class Recognizer:
             print('[RECOGNIZING]: Was unable to recognize audio')
             self.recognition = ""
             self.stm.send("recognition_error")
+
+
+def get_state_machine(name: str, observers: list):
+    recognizer = Recognizer( recognition_keyword='lisa', stm_observers=observers)
+
+    t_i0 = {'source': 'initial', 'target': 'listening'}
+    t_01 = {'trigger': 'new_audio', 'source': 'listening', 'target': 'recognizing'}
+    t_10_a = {'trigger': 'recognition_error', 'source': 'recognizing', 'target': 'listening'}
+    t_10_b = {'trigger': 'recognized', 'source': 'recognizing', 'function': recognizer.was_adressed}
+
+    s_listening = {'name': 'listening', 'entry': 'listen'}
+    s_recognizing = {'name': 'recognizing', 'entry': 'recognize'}
+
+    stm = Machine(name=name, transitions=[t_i0, t_01, t_10_a, t_10_b], states=[s_listening, s_recognizing], obj=recognizer)
+    recognizer.stm = stm
+
+    return stm
 
 
 if __name__ == "__main__":
