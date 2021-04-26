@@ -131,17 +131,19 @@ class WalkieTalkie:
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
- 
+    
+    # Add state machine to this v
     def start_recording(self):
         self.recorder.record()
     
     def stop_recording(self):
         self.recorder.stop()
-
+    
     def reset_recording(self):
         # TODO
         pass
-
+    
+    # Parses server responses
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
@@ -153,8 +155,7 @@ class WalkieTalkie:
             # Retreive message from payload
             wf = payload.get('data')
             data = base64.b64decode(wf)
-            # self._logger.error(data)
-            # Get queue length
+            # Get queue length and saves message in the FIFO order
             queue_number = len(os.listdir("message_queue"))+1
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
@@ -177,7 +178,7 @@ class WalkieTalkie:
             self._logger.error(f'Payload could not be read!')
             self.stm.send("replay_finished")
             pass
-
+    
     def play_message(self):
         # Check queue length
         queue_length = len(os.listdir("message_queue"))
@@ -201,6 +202,7 @@ class WalkieTalkie:
             # TODO
             pass
     
+    # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
     def iterate_queue(self):
         queue_folder = "message_queue"
         for i, filename in enumerate(os.listdir(queue_folder)):
@@ -209,6 +211,7 @@ class WalkieTalkie:
             else:
                 os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
 
+    # Request replay message from the server
     def play_latest_user_message(self):
         name = "bob ross"
         uuid = self.uuid
