@@ -40,6 +40,8 @@ class ServerStm:
             self.handling_success = self.payload.get('device_id_from') and self.payload.get('device_owner_name_to');
         elif command == "register":
             self.handling_success = self.payload.get('uuid') and self.payload.get('name');
+        elif command == "query":
+            self.handling_success = self.payload.get('device_id_from') and  self.payload.get('recipient_name')
         else:
             self.handling_success = False
         # Trigger finished_handling
@@ -105,7 +107,7 @@ class ServerStm:
                 wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
                 self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
                 data = base64.b64encode(wf.read())
-                # Send message to receiver
+                # Send message back to sender
                 payload = {"device_id_from": sender, "device_id_to": receiver, "data": data.decode()}
                 self.response_message = json.dumps(payload)
                 self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
@@ -130,7 +132,19 @@ class ServerStm:
                         json.dump(data, outfile, indent=2)
                     self._logger.info(f'Registering new user {uuid} with name: {name}')
                 self.get_receiver_uuid("bob ross")
-                    
+            elif command == "query": # {"device_id_from": uuid, "recipient_name": name, "command" : "query" }
+                # Get sender's uuid and recipient name from request
+                sender = self.payload.get("device_id_from")
+                name = self.payload.get("recipient_name")
+                # Get recipient uuid
+                recipient_exists = False
+                recipient = self.get_receiver_uuid(name)
+                if recipient != "":
+                    recipient_exists = True
+                # Send message back to sender
+                payload = {"device_id_from": sender, "recipient_name": name, "exists": recipient_exists}
+                self.response_message = json.dumps(payload)
+                self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
         except Exception as e:
             # raise
             self._logger.error(e)
