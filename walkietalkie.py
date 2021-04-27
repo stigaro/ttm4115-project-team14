@@ -66,7 +66,7 @@ class WalkieTalkie:
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
-        self.name = "Christopher"
+        self.name = "christopher"
         stm_walkie_talkie_name = "{}_walkie_talkie".format(self.name)
         walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name=stm_walkie_talkie_name)
         self.stm = walkie_talkie_machine
@@ -95,7 +95,10 @@ class WalkieTalkie:
 
         def extract_btn_name(label):
             label = label.lower()
-            if 'send <' in label:
+            if 'stop' in label:
+                self.stop_recording()
+                return 'stop'
+            elif 'send <' in label:
                 return 'talking'
             elif 'replay <' in label:
                 self.update_status('REPLAY')
@@ -117,7 +120,7 @@ class WalkieTalkie:
             command = extract_btn_name(title)
             self.stm.send(command)
             print("[ACTION]:", command)
-            print("[ACTION]:", self.stm.state)
+            print("[STATE]:", self.stm.state)
         
         if self.debug == True:
             self.app.setPadding([0,0])
@@ -126,6 +129,7 @@ class WalkieTalkie:
             self.app.setStretch("both")
             self.app.setSticky("news")
             self.app.addButton('Send <name>', on_button_pressed_start)
+            self.app.addButton('Stop recording', on_button_pressed_start)
             self.app.addButton('Play', on_button_pressed_start)
             self.app.addButton('Replay', on_button_pressed_start)
             self.app.addButton('Next', on_button_pressed_start)
@@ -165,14 +169,15 @@ class WalkieTalkie:
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
 
-    def query_server(self, recipient): # check if recipient is registered
-        msg = {
-            "command":"query",
-            "device_id_from":self.uuid,
-            "recipient_name":recipient
-        }
-        json_msg = json.dumps(msg)
-        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
+    def query_server(self, **kwargs): # check if recipient is registered
+        if kwargs.get("argument") and kwargs.get("action"):
+            msg = {
+                "command":"query",
+                "device_id_from":self.uuid,
+                "recipient_name": kwargs.get("argument")
+            }
+            json_msg = json.dumps(msg)
+            self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
 
         '''
         request:
@@ -182,22 +187,20 @@ class WalkieTalkie:
         {"device_id_from": sender, "recipient_name": name, "exists": true/false}
         '''
 
-    def start_recording(self, args):
-        print(args["recognition_string"])
+    def start_recording(self):
+        self.update_status("RECORDING")
         self.recorder.record()
 
     def stop_recording(self):
+        self.update_status("STOP RECORDING")
         self.recorder.stop()
-    
-    def reset_recording(self):
-        # TODO
-        pass
     
     # Parses server responses
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
         elif payload.get('exists') == True: # if recipient exists
+            self.recipient = payload.get("recipient_name")
             self.stm.send("recipient_ok")
         elif payload.get('exists') == False: # if recipient does not exists
             self.stm.send("recipient_not_found")
@@ -298,12 +301,12 @@ class WalkieTalkie:
     def send_data(self):
         filename = self.recorder.filename
         byte_data = open(filename, 'rb')
-        data = base64.b64encode(byte_data)
+        data = base64.b64encode(byte_data.read())
         msg = {
             "device_id_from":self.uuid,
-            "device_owner_name_to":"recipient",
-            "command":"message",
-            "data":data
+            "device_owner_name_to": self.recipient,
+            "command": "message",
+            "data": data.decode()
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
@@ -409,6 +412,7 @@ transitions = [
         "source":"listening",
         "target":"check_recipient",
         "trigger":"send",
+        "effect": "query_server(*)",
     },
     {
         "source":"check_recipient",
@@ -453,7 +457,7 @@ states = [
     },
     {
         "name":"check_recipient",
-        "entry":"query_server(*); start_timer('time_out',3000)",
+        "entry":"start_timer('time_out',3000)",
         "exit":"stop_timer('time_out')",
         "save_message":"save_message(*)",
     },
@@ -476,26 +480,8 @@ states = [
         "save_message": "save_message(*); save_message(*)",
     },
     {
-        "name":"record_message",
-        "entry":"start_timer('t',3000)",
-        "exit":"stop_recording",
-        "save_message": "save_message(*)",
-    },
-    {
-        "name":"processing",
-        "entry":"check_message",
-        "exit":"reset_recording",
-        "save_message": "save_message(*)",
-    },
-    {
-        "name":"send",
-        "entry":"start_timer('time_out',5000); send_data",
-        "exit":"stop_timer('time_out')",
-        "save_message": "save_message(*)",
-    },
-    {
         "name":"recording",
-        "entry":"start_recording(*)",
+        "do":"start_recording()",
         "save_message":"save_message(*)",
     },
     {

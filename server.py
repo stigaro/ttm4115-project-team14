@@ -89,7 +89,7 @@ class ServerStm:
                     fil.write(wf)
                     self._logger.debug(f'Message saved to /stored_messages/{sender}-{receiver}.wav')
                 # Send to receiver
-                payload = {"device_id_from": sender, "device_id_to": receiver, "data": data}
+                payload = {"device_id_from": sender, "device_id_to": receiver, "command": "message", "data": data}
                 self.response_message = json.dumps(payload)
                 self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(receiver)
             elif command == "replay": # {"device_id_from": 1, "device_owner_name_to": name, "command" : "replay"}
