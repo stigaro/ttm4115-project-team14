@@ -55,6 +55,7 @@ class WalkieTalkie:
         self._logger = logging.getLogger(__name__)
         self._logger.info('logging under name {}.'.format(__name__))
         self._logger.info('Starting Component')
+        self.debug = True
 
         self.recorder = Recorder()
         self.tts = Speaker()
@@ -78,7 +79,17 @@ class WalkieTalkie:
         self._logger.debug('Component initialization finished')
 
     def create_gui(self):
-        self.app = gui()
+        self.app = gui("Walkie Talkie", "320x568", bg='yellow')
+        self.app.setStretch("both")
+        self.app.setSticky("")
+        self.app.setBgImage("bg.gif")
+
+        if self.debug == True:
+            self.app.setInPadding([40,40])
+            self.app.setPadding([0,50])
+        self.app.addLabel("status", "State: STATUS", 0, 0)
+        self.app.setLabelBg("status", "#3e3e3e")
+        self.app.setLabelFg("status", "white")
 
         def extract_btn_name(label):
             label = label.lower()
@@ -89,25 +100,36 @@ class WalkieTalkie:
             elif 'replay' in label:
                 return 'replay_message'
             elif 'next' in label:
+                #self.app.thread(self.vibrate)
                 return 'next'
             elif 'play' in label:
+                #self.app.setLabel("status", "State: PLAYING")
+                #self.app.setBgImage("bg_green.gif")
                 return 'play_message'
             return None
 
-        self.app.startLabelFrame('Walkie talkie')
 
         def on_button_pressed_start(title):
             command = extract_btn_name(title)
             self.stm.send(command)
             print("[ACTION]:", command)
             print("[ACTION]:", self.stm.state)
-
-        self.app.addButton('Send <name>', on_button_pressed_start)
-        self.app.addButton('Play', on_button_pressed_start)
-        self.app.addButton('Replay', on_button_pressed_start)
-        self.app.addButton('Next', on_button_pressed_start)
-        self.app.addButton('Replay <name>', on_button_pressed_start)
-        self.app.stopLabelFrame()
+        
+        if self.debug == True:
+            self.app.setPadding([0,0])
+            self.app.setInPadding([60,40])
+            self.app.startLabelFrame("Debug panel",1,0)
+            self.app.setStretch("both")
+            self.app.setSticky("news")
+            self.app.addButton('Send <name>', on_button_pressed_start)
+            self.app.addButton('Play', on_button_pressed_start)
+            self.app.addButton('Replay', on_button_pressed_start)
+            self.app.addButton('Next', on_button_pressed_start)
+            self.app.addButton('Replay <name>', on_button_pressed_start)
+            self.app.stopLabelFrame()
+        else:
+            self.app.setTransparency(0)
+            self.app.addLabel("padding", "", 1, 0)
         self.app.go()
 
     def on_init(self):
@@ -275,6 +297,7 @@ class WalkieTalkie:
         print("*Blinking stopped!*")
 
     def vibrate(self):
+        self.recorder.play("vibrate.wav")
         print("Walkie goes brrrrrr...")
 
     def stop(self):

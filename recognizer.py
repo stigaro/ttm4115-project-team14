@@ -1,3 +1,5 @@
+import re
+
 import speech_recognition as sr
 from stmpy import Machine, Driver
 
@@ -11,6 +13,13 @@ class Recognizer:
     the state machine will send the recognition as argument to the observers in a transition.
     """
 
+    recognizable_action_words = [
+        'send message',
+        'replay',
+        'next',
+        'play'
+    ]
+
     def __init__(self, recognition_keyword='communicator', stm_observers=[]):
         self.stm: Machine = None
         self.stm_observers: list = stm_observers
@@ -20,16 +29,36 @@ class Recognizer:
         self.recognition_word = recognition_keyword
         self.recognition = ""
 
-    def update_observers(self):
+    def parse_recognition_to_arguments(self):
         # Prepares recognition. By default we only send the last activation keyword string
         recognition_string = self.recognition.split(self.recognition_word)[-1].lstrip()
-        print("[OBSERVER_UPDATE]: '{}'".format(recognition_string))
+
+        # Finds the latest recognizable action word
+        recognized_action_word = None
+        for action_word in Recognizer.recognizable_action_words:
+            # https://stackoverflow.com/questions/4154961/find-substring-in-string-but-only-if-whole-words
+            if re.search(r"\b" + re.escape(action_word) + r"\b", recognition_string):
+                recognized_action_word = action_word
+
+        # Splits the string into arguments by keyword reduction function definition
+        recognition_argument = recognition_string.split(recognized_action_word)[-1]
+
+        return dict({
+            'action': recognized_action_word,
+            'argument': recognition_argument
+        })
+
+    def update_observers(self):
+        recognition_dictionary = self.parse_recognition_to_arguments()
+        print("[ACTION_FOUND]: '{}'".format(recognition_dictionary))
+
+        if recognition_dictionary['action'] is None:
+            return  # If there is no recognizable action we avoid sending
+
+        # Update all observers with action
         for stm_observer in self.stm_observers:
             try:
-                self.stm.driver.send('adressed', stm_observer, args=[{
-                    'recognition_word': self.recognition_word,
-                    'recognition_string': recognition_string
-                }])
+                self.stm.driver.send(recognition_dictionary['action'], stm_observer, kwargs=recognition_dictionary)
             except Exception:
                 print("WARNING; Recognizer raised exception when sending to observer")
                 continue  # We ignore any exceptions.
@@ -80,7 +109,7 @@ def get_state_machine(name: str, observers: list):
 
 
 if __name__ == "__main__":
-    recognizer = Recognizer()
+    recognizer = Recognizer('lisa')
 
     t_i0 = {'source': 'initial', 'target': 'listening'}
     t_01 = {'trigger': 'new_audio', 'source': 'listening', 'target': 'recognizing'}
