@@ -13,34 +13,6 @@ class Recorder:
         self.filename = "output.wav"
         self.p = pyaudio.PyAudio()
 
-    # Creates the appJar gui, handling the button events
-    def create_gui(self):
-        self.app = gui("Walkie Talkie", "320x568", bg='yellow')
-        self.app.setBgImage("bg.gif")
-        def extract_timer_name(label):
-            label = label.lower()
-            if 'stop' in label:
-                return 'stop'
-            elif 'record' in label:
-                return 'record'
-            elif 'play' in label:
-                return 'play'
-            return None
-
-        #self.app.startLabelFrame('Audio recording and playback')
-
-        def on_button_pressed_start(title):
-            command = extract_timer_name(title)
-            self.stm.send(command)  # Start recording
-            print("[ACTION]:", command)
-
-        self.app.addButton('Record', on_button_pressed_start)
-        self.app.addButton('Play', on_button_pressed_start)
-        self.app.addButton('Stop recording', on_button_pressed_start)
-        #self.app.stopLabelFrame()
-
-        self.app.go()
-
     def record(self):
         stream = self.p.open(format=self.sample_format,
                              channels=self.channels,

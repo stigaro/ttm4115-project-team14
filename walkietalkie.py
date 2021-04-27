@@ -77,7 +77,7 @@ class WalkieTalkie:
         self.app = gui("Walkie Talkie", "320x568", bg='yellow')
         self.app.setStretch("both")
         self.app.setSticky("")
-        self.app.setBgImage("bg.gif")
+        self.app.setBgImage("images/bg.gif")
 
         if self.debug == True:
             self.app.setInPadding([40,40])
@@ -99,7 +99,7 @@ class WalkieTalkie:
                 return 'next'
             elif 'play' in label:
                 #self.app.setLabel("status", "State: PLAYING")
-                #self.app.setBgImage("bg_green.gif")
+                #self.app.setBgImage("images/bg_green.gif")
                 return 'play_message'
             return None
 
