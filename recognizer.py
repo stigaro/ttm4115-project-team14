@@ -1,3 +1,5 @@
+import re
+
 import speech_recognition as sr
 from stmpy import Machine, Driver
 
@@ -14,7 +16,8 @@ class Recognizer:
     recognizable_action_words = [
         'send message',
         'replay',
-        'next'
+        'next',
+        'play'
     ]
 
     def __init__(self, recognition_keyword='communicator', stm_observers=[]):
@@ -33,7 +36,8 @@ class Recognizer:
         # Finds the latest recognizable action word
         recognized_action_word = None
         for action_word in Recognizer.recognizable_action_words:
-            if action_word in recognition_string:
+            # https://stackoverflow.com/questions/4154961/find-substring-in-string-but-only-if-whole-words
+            if re.search(r"\b" + re.escape(action_word) + r"\b", recognition_string):
                 recognized_action_word = action_word
 
         # Splits the string into arguments by keyword reduction function definition
