@@ -137,7 +137,7 @@ class WalkieTalkie:
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
 
-    def query_server(self, recipient):
+    def query_server(self, recipient): # check if recipient is registered
         msg = {
             "command":"query",
             "recipient":recipient
@@ -159,6 +159,10 @@ class WalkieTalkie:
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
+        elif payload.get('command') == "query" and payload.get('status') == "ok": # {"command":"query","status":"ok"}
+            self.stm.send("recipient_ok")
+        elif payload.get('command') == "query" and payload.get('status') == "not_found": # {"command":"query","status":"not_found"}
+            self.stm.send("recipient_not_found")
         elif payload.get('data'):
             self.stm.send('replay_save_message', args=[payload])
 
