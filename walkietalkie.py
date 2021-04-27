@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import logging
 import json
 import base64
+import time
 from appJar import gui
 from recognizer import Recognizer
 from recorder import Recorder
@@ -67,6 +68,7 @@ class WalkieTalkie:
         self.name = "Christopher"
         walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name="{}_walkie_talkie".format(self.name))
         self.stm = walkie_talkie_machine
+        self.app = {}
 
         self.stm_driver = Driver()
         self.stm_driver.add_machine(walkie_talkie_machine)
@@ -91,6 +93,7 @@ class WalkieTalkie:
             if 'send <' in label:
                 return 'talking'
             elif 'replay <' in label:
+                self.update_status('REPLAY')
                 return 'request_replay_message'
             elif 'replay' in label:
                 return 'replay_message'
@@ -100,6 +103,7 @@ class WalkieTalkie:
             elif 'play' in label:
                 #self.app.setLabel("status", "State: PLAYING")
                 #self.app.setBgImage("images/bg_green.gif")
+                self.update_status('PLAYING')
                 return 'play_message'
             return None
 
@@ -125,6 +129,8 @@ class WalkieTalkie:
         else:
             self.app.setTransparency(0)
             self.app.addLabel("padding", "", 1, 0)
+        self.update_led(False)
+        self.update_status('LISTENING')
         self.app.go()
 
     def on_init(self):
@@ -182,6 +188,7 @@ class WalkieTalkie:
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
+            self.update_led(False)
         except:
             self._logger.error(f'Payload could not be read!')
 
@@ -196,7 +203,7 @@ class WalkieTalkie:
             self.recorder.play("replay_message.wav")
             self.stm.send("replay_finished")
         except:
-            # TODO
+            self.update_led(True)
             self._logger.error(f'Payload could not be read!')
             self.stm.send("replay_finished")
             pass
@@ -209,17 +216,19 @@ class WalkieTalkie:
             self.recorder.play("message_queue/1.wav")
             self.stm.send('message_played')
         else:
+            self.update_led(True)
             # self.tts_error('ok')
-            # TODO
             self.stm.send('message_played')
             pass
     
     def load_next_message_in_queue(self):
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
-        if queue_length > 1:
+        if queue_length > 1: # If not the last message
             self.iterate_queue()
         else:
+            self.iterate_queue()
+            self.update_led(True)
             # self.tts_error('no_ack_received')
             # TODO
             pass
@@ -232,6 +241,7 @@ class WalkieTalkie:
                 os.remove(f"{queue_folder}/{filename}")
             else:
                 os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
+        self.update_led(False)
 
     # Request replay message from the server
     def play_latest_user_message(self):
@@ -284,12 +294,29 @@ class WalkieTalkie:
         self.text_to_speech(msg)
         self._logger.debug(msg)
     
+    def update_status(self, text):
+        if self.app != {}:
+            label = "State:"+text
+            self.app.setLabel("status", label)
+
+    def update_led(self,is_error):
+        if is_error:
+            self.app.setBgImage("images/bg_red.gif")
+        else:
+            # Blink green if there's message in queue
+            queue_folder = "message_queue"
+            queue_length = len(os.listdir(queue_folder))
+            if queue_length > 0:
+                self.app.setBgImage("images/bg_green.gif")
+            else:
+                self.app.setBgImage("images/bg.gif")
+
     def blink(self):
-        print("*Intense blinking*")
+        self._logger.debug("*Intense blinking*")
     
     def vibrate(self):
         self.recorder.play("vibrate.wav")
-        print("Walkie goes brrrrrr...")
+        self._logger.debug("Walkie goes brrrrrr...")
 
     def stop(self):
         # stop the MQTT client
@@ -422,6 +449,7 @@ transitions = [
 states = [
     {
         "name":"listening",
+        "do": "update_status('LISTENING')",
     },
     {
         "name":"receive_message",
@@ -431,36 +459,43 @@ states = [
     {
         "name":"replay",
         "do": "play_latest_user_message()",
+        "save_message": "save_message(*)",
     },
     {
         "name":"playing_replay",
         "do": "play_replay_message(*)",
         "replay_save_message": "defer",
+        "save_message": "save_message(*)",
     },
     {
         "name":"playing",
         "do": "play_message()",
         "entry": "stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
+        "save_message": "save_message(*); save_message(*)",
     },
     {
         "name":"record_message",
         "entry":"start_timer('t',3000)",
-        "exit":"stop_recording"
+        "exit":"stop_recording",
+        "save_message": "save_message(*)",
     },
     {
         "name":"processing",
         "entry":"check_message",
-        "exit":"reset_recording"
+        "exit":"reset_recording",
+        "save_message": "save_message(*)",
     },
     {
         "name":"send",
         "entry":"start_timer('time_out',5000); send_data",
         "exit":"stop_timer('time_out')",
+        "save_message": "save_message(*)",
     },
     {
         "name":"exception",
-        "entry":"blink; vibrate"
+        "entry":"blink; vibrate",
+        "save_message": "save_message(*)",
     },
 ]
 
