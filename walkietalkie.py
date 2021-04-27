@@ -4,7 +4,7 @@ import logging
 import json
 import base64
 from appJar import gui
-from recognizer import Recognizer
+from recognizer import get_state_machine
 from recorder import Recorder
 from stmpy import Driver, Machine
 from threading import Thread
@@ -59,17 +59,22 @@ class WalkieTalkie:
 
         self.recorder = Recorder()
         self.tts = Speaker()
+        # self.recognizer = Recognizer()
 
         self.uuid = uuid4().hex
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
         self.name = "Christopher"
-        walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name="{}_walkie_talkie".format(self.name))
+        stm_walkie_talkie_name = "{}_walkie_talkie".format(self.name)
+        walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name=stm_walkie_talkie_name)
         self.stm = walkie_talkie_machine
+
+        recognizer_stm = get_state_machine('stm_recognizer', [stm_walkie_talkie_name])
 
         self.stm_driver = Driver()
         self.stm_driver.add_machine(walkie_talkie_machine)
+        self.stm_driver.add_machine(recognizer_stm)
         self.stm_driver.start()
         self._logger.debug('Component initialization finished')
 
@@ -140,7 +145,7 @@ class WalkieTalkie:
         # Create GUI in a new thread
         th = Thread(target=self.create_gui)
         th.start()
-        
+
     def text_to_speech(self, text):
         self.tts.speak(str(text))
 
@@ -153,20 +158,38 @@ class WalkieTalkie:
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
+
+    def query_server(self, recipient): # check if recipient is registered
+        msg = {
+            "command":"query",
+            "device_id_from":self.uuid,
+            "recipient_name":recipient
+        }
+        json_msg = json.dumps(msg)
+        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
+
+        '''
+        request:
+        {"device_id_from": uuid, "recipient_name": name, "command" : "query" }
  
-    def start_recording(self):
+        response:
+        {"device_id_from": sender, "recipient_name": name, "exists": true/false}
+        '''
+
+    def start_recording(self, args):
+        print(args["recognition_string"])
         self.recorder.record()
-    
+
     def stop_recording(self):
         self.recorder.stop()
-
-    def reset_recording(self):
-        # TODO
-        pass
 
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
+        elif payload.get('exists') == True: # if recipient exists
+            self.stm.send("recipient_ok")
+        elif payload.get('exists') == False: # if recipient does not exists
+            self.stm.send("recipient_not_found")
         elif payload.get('data'):
             self.stm.send('replay_save_message', args=[payload])
 
@@ -202,27 +225,25 @@ class WalkieTalkie:
 
     def play_message(self):
         # Check queue length
-        queue_length = len(os.listdir("message_queue"))
-        if queue_length > 0:
+        if self.check_message_queue(0):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play("message_queue/1.wav")
             self.stm.send('message_played')
         else:
-            # self.tts_error('ok')
-            # TODO
-            self.stm.send('message_played')
-            pass
-    
+            self.tts_error('message_queue_empty')
+
     def load_next_message_in_queue(self):
-        queue_folder = "message_queue"
-        queue_length = len(os.listdir(queue_folder))
-        if queue_length > 1:
+        if self.check_message_queue(1):
             self.iterate_queue()
+
+    def check_message_queue(self, i): # returns true if there are more than i messages left in queue
+        if len(os.listdir("message_queue")) > i:
+            self.blink()
+            return True
         else:
-            # self.tts_error('no_ack_received')
-            # TODO
-            pass
-    
+            self.stop_blink()
+            return False
+
     def iterate_queue(self):
         queue_folder = "message_queue"
         for i, filename in enumerate(os.listdir(queue_folder)):
@@ -242,24 +263,10 @@ class WalkieTalkie:
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
 
-    def check_message(self):
-        # Should be fixed
-        msg = self.Recognizer.recognize()
-        if len(msg) < 2:
-            self.speak_empty_message()
-        else:
-            #check if the message does not contain any normal words, if so, we call it empty
-            usual_words = ["hello", "help", "thanks"] #liste med ofte brukte ord, lang
-            for word in usual_words:
-                if word in msg:
-                    break
-                else:
-                    self.error("empty_message")
-
     def send_data(self):
         filename = self.recorder.filename
         byte_data = open(filename, 'rb')
-        data = b64encode(byte_data)
+        data = base64.b64encode(byte_data)
         msg = {
             "device_id_from":self.uuid,
             "device_owner_name_to":"recipient",
@@ -268,22 +275,27 @@ class WalkieTalkie:
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
-    
+
     def tts_error(self, exception):
         if exception == "recipient_not_found":
             msg = "Could not find recipient. Please try again."
-        elif exception == "empty_message":
-            msg = "Message was empty. Please try again."
+        elif exception == "empty_message_queue":
+            msg = "No more messages"
         elif exception == "no_ack_received":
             msg = "Could not connect. Please try again"
         elif exception == "ok":
             msg = "Message sent"
+        elif exception == "time_out":
+            msg = "Connection lost"
         self.text_to_speech(msg)
         self._logger.debug(msg)
-    
+
     def blink(self):
         print("*Intense blinking*")
-    
+
+    def stop_blink(self):
+        print("*Blinking stopped!*")
+
     def vibrate(self):
         self.recorder.play("vibrate.wav")
         print("Walkie goes brrrrrr...")
@@ -302,24 +314,6 @@ transitions = [
         "source": "initial",
         "target": "listening",
         "effect": "on_init"
-    },
-    # Register
-    {
-        "source": "listening",
-        "target": "listening",
-        "trigger": "register",
-        "effect": "register"
-    },
-    # Receive message
-    {
-        "source": "listening",
-        "target": "receive_message",
-        "trigger": "save_message",
-    },
-    {
-        'source': 'receive_message',
-        'target': 'listening',
-        'trigger': 'done',
     },
     # Play message
     {
@@ -360,57 +354,41 @@ transitions = [
         'target': 'listening',
         'trigger': 'replay_finished',
     },
-    # Record message
+    # check recipient
     {
         "source":"listening",
-        "target":"record_message",
-        "trigger":"talking",
-        "effect":"start_recording"
+        "target":"check_recipient",
+        "trigger":"send",
     },
     {
-        "source":"record_message",
-        "target":"record_message",
-        "trigger":"talking"
-    },
-    {
-        "source":"record_message",
-        "target":"processing",
-        "trigger":"t",
-    },
-    {
-        "source":"processing",
-        "target":"send",
-        "trigger":"done",
-    },
-    # Processing and Send exceptions
-    {
-        "source":"processing",
+        "source":"check_recipient",
         "target":"exception",
         "trigger":"recipient_not_found",
         "effect":"tts_error('recipient_not_found')"
     },
     {
-        "source":"processing",
-        "target":"exception",
-        "trigger":"empty_message",
-        "effect":"tts_error('empty_message')"
-    },
-    {
-        "source":"send",
+        "source":"check_recipient",
         "target":"exception",
         "trigger":"time_out",
-        "effect":"tts_error('no_ack_received')"
+        "effect":"tts_error('time_out')"
     },
+    {
+        "source":"check_recipient",
+        "target":"recording",
+        "trigger":"recipient_ok"
+    },
+    # Recording
+    {
+        "source":"recording",
+        "target":"listening",
+        "trigger":"done",
+        "effect":"send_data; tts_error('ok')"
+    },
+    # Exceptions
     {
         "source":"exception",
         "target":"listening",
-        "trigger":"error_done"
-    },
-    {
-        "source":"send",
-        "target":"listening",
-        "trigger":"ack",
-        "effect":"tts_error('ok')"
+        "trigger":"done"
     },
 ]
 
@@ -419,45 +397,43 @@ transitions = [
 states = [
     {
         "name":"listening",
+        "register":"register()",
+        "save_message":"save_message(*)",
+        "entry":"check_message_queue"
     },
     {
-        "name":"receive_message",
-        "do": "save_message(*)",
-        "save_message": "defer",
+        "name":"check_recipient",
+        "entry":"query_server(*); start_timer('time_out',3000)",
+        "exit":"stop_timer('time_out')",
+        "save_message":"save_message(*)",
     },
     {
         "name":"replay",
         "do": "play_latest_user_message()",
+        "save_message":"save_message(*)",
     },
     {
         "name":"playing_replay",
         "do": "play_replay_message(*)",
         "replay_save_message": "defer",
+        "save_message":"save_message(*)",
     },
     {
         "name":"playing",
         "do": "play_message()",
         "entry": "stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
+        "save_message":"save_message(*)",
     },
     {
-        "name":"record_message",
-        "entry":"start_timer('t',3000)",
-        "exit":"stop_recording"
-    },
-    {
-        "name":"processing",
-        "entry":"check_message",
-        "exit":"reset_recording"
-    },
-    {
-        "name":"send",
-        "entry":"start_timer('time_out',5000); send_data",
-        "exit":"stop_timer('time_out')",
+        "name":"recording",
+        "entry":"start_recording(*)",
+        "save_message":"save_message(*)",
     },
     {
         "name":"exception",
-        "entry":"blink; vibrate"
+        "entry":"blink; vibrate",
+        "save_message":"save_message(*)",
     },
 ]
 
