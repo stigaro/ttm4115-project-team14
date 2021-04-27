@@ -13,8 +13,7 @@ class Recorder:
         self.filename = "output.wav"
         self.p = pyaudio.PyAudio()
 
-        # Creates the appJar gui, handling the button events
-
+    # Creates the appJar gui, handling the button events
     def create_gui(self):
         self.app = gui("Walkie Talkie", "320x568", bg='yellow')
         self.app.setBgImage("bg.gif")
@@ -75,8 +74,8 @@ class Recorder:
         wf.writeframes(b''.join(self.frames))
         wf.close()
 
-    def play(self):
-        filename = 'output.wav'
+    def play(self, filename):
+        # filename = 'output.wav'
         # Set chunk size of 1024 samples per data frame
         chunk = 1024
         # Open the sound file 
@@ -111,7 +110,7 @@ if __name__ == "__main__":
     t22 = {'trigger': 'done', 'source': 'recording', 'target': 'processing'}
     t23 = {'trigger': 'done', 'source': 'processing', 'target': 'ready'}
 
-    s_playing = {'name': 'playing', 'do': 'play()'}
+    s_playing = {'name': 'playing', 'do': 'play("output.wav")'}
     s_recording = {'name': 'recording', 'do': 'record()', "stop": "stop()"}
     s_processing = {'name': 'processing', 'do': 'process()'}
 
