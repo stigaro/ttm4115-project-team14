@@ -78,13 +78,14 @@ class WalkieTalkie:
         self.app.setStretch("both")
         self.app.setSticky("")
         self.app.setBgImage("bg.gif")
-        # self.app.addImage("pic", "blink_green.gif")
+
         if self.debug == True:
             self.app.setInPadding([40,40])
             self.app.setPadding([0,50])
         self.app.addLabel("status", "State: STATUS", 0, 0)
         self.app.setLabelBg("status", "#3e3e3e")
         self.app.setLabelFg("status", "white")
+
         def extract_btn_name(label):
             label = label.lower()
             if 'send <' in label:
@@ -94,10 +95,11 @@ class WalkieTalkie:
             elif 'replay' in label:
                 return 'replay_message'
             elif 'next' in label:
+                #self.app.thread(self.vibrate)
                 return 'next'
             elif 'play' in label:
-                self.app.setLabel("status", "State: PLAYING")
-                self.app.setBgImage("bg_green.gif")
+                #self.app.setLabel("status", "State: PLAYING")
+                #self.app.setBgImage("bg_green.gif")
                 return 'play_message'
             return None
 
@@ -283,6 +285,7 @@ class WalkieTalkie:
         print("*Intense blinking*")
     
     def vibrate(self):
+        self.recorder.play("vibrate.wav")
         print("Walkie goes brrrrrr...")
 
     def stop(self):
