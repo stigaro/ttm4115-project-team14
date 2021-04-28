@@ -172,6 +172,9 @@ class WalkieTalkie:
             }
             json_msg = json.dumps(msg)
             self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
+        else:
+            self.stm.send("time_out")
+
         '''
         request:
         {"device_id_from": uuid, "recipient_name": name, "command" : "query" }
@@ -213,7 +216,7 @@ class WalkieTalkie:
             self.update_led(False)
         except:
             self._logger.error(f'Payload could not be read!')
-        self.check_message_queue(0)
+        self.check_message_queue(1)
 
     def play_replay_message(self, payload):
         try:
@@ -235,7 +238,7 @@ class WalkieTalkie:
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
-        if self.check_message_queue(0):
+        if self.check_message_queue(1):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
@@ -247,7 +250,7 @@ class WalkieTalkie:
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
         self._logger.info(f'Playing message {queue_length}!')
-        if self.check_message_queue(1): # If not the last message
+        if self.check_message_queue(2): # If not the last message
             self.iterate_queue()
         else:
             self.iterate_queue()
@@ -450,6 +453,7 @@ states = [
     {
         "name":"listening",
         "do": "update_status('LISTENING')",
+        "entry": "update_led(False)"
         "register": "register()",
         "save_message": "save_message(*)",
     },
