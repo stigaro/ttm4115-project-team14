@@ -22,14 +22,14 @@ class MQTT_Client:
     def __init__(self, component):
         self.count = 0
         self.component = component
-        # callback methods
+        # Callback methods
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
 
     def on_connect(self, client, userdata, flags, rc):
         print("on_connect(): {}".format(mqtt.connack_string(rc)))
-        self.stm.send("register")
+        self.component.stm.send("register")
 
     def on_message(self, client, userdata, msg):
         self.component._logger.debug("on_message(): topic: {}".format(msg.topic))
@@ -58,7 +58,7 @@ class WalkieTalkie:
         self._logger.info('Starting Component')
         self.debug = True
 
-        self.recorder = Recorder()
+        self.recorder = Recorder(self)
         self.tts = Speaker()
 
         self.uuid = uuid4().hex
@@ -100,14 +100,12 @@ class WalkieTalkie:
             elif 'send <' in label:
                 return 'send'
             elif 'replay <' in label:
-                self.update_status('REPLAYING')
                 return 'replay'
             elif 'replay' in label:
                 return 'replay'
             elif 'next' in label:
                 return 'next'
             elif 'play' in label:
-                self.update_status('PLAYING')
                 return 'play'
             return None
 
@@ -233,6 +231,7 @@ class WalkieTalkie:
             self.stm.send("replay_finished")
     
     def play_message(self):
+        self.update_status("PLAYING")
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))

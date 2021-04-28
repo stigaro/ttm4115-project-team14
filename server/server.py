@@ -182,14 +182,10 @@ class ServerStm:
             'function': server_logic.handle_compound_transition}
         # regular transitions
         t3 = {
-            'source': 'send',
-            'trigger': 'message_sent',
-            'target': 'passive'}
-        t4 = {
             'source': 'build',
             'trigger': 'response_built',
             'target': 'send'}
-        t5 = {
+        t4 = {
             'source': 'build',
             'trigger': 'response_failed',
             'target': 'send'}
@@ -200,9 +196,11 @@ class ServerStm:
         s1 = {
             'name': 'send',
             'entry': 'send_message'}
-        server_stm = stmpy.Machine(name=server_name, transitions=[t0,t1,t2,t3,t4,t5], states=[s0,s1],
+        server_stm = stmpy.Machine(name=server_name, transitions=[t0,t1,t2,t3,t4], states=[s0,s1],
                                   obj=server_logic)
         server_logic.stm = server_stm
+        with open("graph.gv", "w") as f:
+            f.write(stmpy.get_graphviz_dot(server_stm))
         return server_stm
 
 class Server:
