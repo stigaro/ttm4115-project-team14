@@ -1,0 +1,15 @@
+digraph G {
+node [shape=box style=rounded fontname=Helvetica];
+edge [ fontname=Helvetica ];
+initial [shape=point width=0.2];
+build [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>build</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / build_response()<BR/></TD></TR></TABLE>>];send [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>send</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / send_message()<BR/></TD></TR></TABLE>>];initial -> passive [label="  /started();\n"]
+passive -> handle [label=" incoming_request /\nhandle_request();\n"]
+handle -> d_2 [label="handle_compound_transition()"]
+d_2 [shape=diamond, style=filled, label="", fillcolor=black, height=0.3, width=0.3, fixedsize=true]
+d_2 -> send
+d_2 -> build
+build -> send [label=" response_built"]
+build -> send [label=" response_failed"]
+}
