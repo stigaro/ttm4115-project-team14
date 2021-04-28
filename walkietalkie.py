@@ -87,7 +87,7 @@ class WalkieTalkie:
         self.app.setBgImage("images/bg.gif")
 
         if self.debug == True:
-            self.app.setInPadding([40,40])
+            self.app.setInPadding([30,40])
             self.app.setPadding([0,50])
         self.app.addLabel("status", "State: STATUS", 0, 0)
         self.app.setLabelBg("status", "#3e3e3e")
@@ -99,20 +99,19 @@ class WalkieTalkie:
                 self.stop_recording()
                 return 'stop'
             elif 'send <' in label:
+                # Wont work as of now
                 return 'talking'
             elif 'replay <' in label:
-                self.update_status('REPLAY')
-                return 'request_replay_message'
+                # Wont work as of now
+                self.update_status('REPLAYING')
+                return 'replay'
             elif 'replay' in label:
-                return 'replay_message'
+                return 'replay'
             elif 'next' in label:
-                #self.app.thread(self.vibrate)
                 return 'next'
             elif 'play' in label:
-                #self.app.setLabel("status", "State: PLAYING")
-                #self.app.setBgImage("images/bg_green.gif")
                 self.update_status('PLAYING')
-                return 'play_message'
+                return 'play'
             return None
 
 
@@ -178,7 +177,6 @@ class WalkieTalkie:
             }
             json_msg = json.dumps(msg)
             self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
-
         '''
         request:
         {"device_id_from": uuid, "recipient_name": name, "command" : "query" }
@@ -220,7 +218,6 @@ class WalkieTalkie:
             self.update_led(False)
         except:
             self._logger.error(f'Payload could not be read!')
-        # TODO
         self.check_message_queue(0)
 
     def play_replay_message(self, payload):
@@ -237,7 +234,6 @@ class WalkieTalkie:
             self.update_led(True)
             self._logger.error(f'Payload could not be read!')
             self.stm.send("replay_finished")
-            pass
     
     def play_message(self):
         # Check queue length
@@ -245,7 +241,7 @@ class WalkieTalkie:
         queue_length = len(os.listdir(queue_folder))
         if self.check_message_queue(0):
             self._logger.info(f'Playing message 1/{queue_length}!')
-            self.recorder.play("message_queue/1.wav")
+            self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
         else:
             self.update_led(True)
@@ -253,29 +249,23 @@ class WalkieTalkie:
             self.stm.send('message_played')
     
     def load_next_message_in_queue(self):
-        queue_folder = "message_queue"
-        queue_length = len(os.listdir(queue_folder))
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if queue_length > 1: # If not the last message
-            # self.tts_error('message_queue_empty')
+        self._logger.info(f'Playing message {queue_length}!')
+        if self.check_message_queue(1): # If not the last message
             self.iterate_queue()
         else:
             self.iterate_queue()
             self.update_led(True)
+            # self.tts_error('message_queue_empty')
             # self.tts_error('no_ack_received')
-            return False
 
     def load_next_message_in_queue(self):
-        if self.check_message_queue(1):
             self.iterate_queue()
 
     def check_message_queue(self, i): # returns true if there are more than i messages left in queue
         if len(os.listdir("message_queue")) > i:
-            self.blink()
             return True
-        else:
-            self.stop_blink()
-            return False
+        return False
 
     def iterate_queue(self):
         queue_folder = "message_queue"
@@ -288,7 +278,8 @@ class WalkieTalkie:
 
     # Request replay message from the server
     def play_latest_user_message(self):
-        name = "bob ross"
+        self.update_status("REPLAYING")
+        name = self.recipient
         uuid = self.uuid
         msg = {
             "device_id_from": uuid,
@@ -342,12 +333,6 @@ class WalkieTalkie:
             else:
                 self.app.setBgImage("images/bg.gif")
 
-    def blink(self):
-        self._logger.debug("*Intense blinking*")
-    
-    def stop_blink(self):
-        print("*Blinking stopped!*")
-
     def vibrate(self):
         self.recorder.play("vibrate.wav")
         self._logger.debug("Walkie goes brrrrrr...")
@@ -371,12 +356,12 @@ transitions = [
     {
         "source": "listening",
         "target": "playing",
-        "trigger": "play_message",
+        "trigger": "play",
     },
     {
         "source": "playing",
         "target": "playing",
-        "trigger": "replay_message",
+        "trigger": "replay",
         "effect": "stop_timer('time_out')",
     },
     {
@@ -394,8 +379,26 @@ transitions = [
     # Request replay message
     {
         "source": "listening",
+        "target": "check_replay_recipient",
+        "trigger": "replay",
+        "effect": "query_server(*)",
+    },
+    {
+        "source": "check_replay_recipient",
+        "target": "exception",
+        "trigger": "recipient_not_found",
+        "effect": "tts_error('recipient_not_found')"
+    },
+    {
+        "source": "check_replay_recipient",
+        "target": "exception",
+        "trigger": "time_out",
+        "effect": "tts_error('time_out')"
+    },
+    {
+        "source": "check_replay_recipient",
         "target": "replay",
-        "trigger": "request_replay_message",
+        "trigger": "recipient_ok"
     },
     {
         'source': 'replay',
@@ -462,6 +465,12 @@ states = [
         "save_message":"save_message(*)",
     },
     {
+        "name":"check_replay_recipient",
+        "entry":"start_timer('time_out',3000)",
+        "exit":"stop_timer('time_out')",
+        "save_message":"save_message(*)",
+    },
+    {
         "name":"replay",
         "do": "play_latest_user_message()",
         "save_message": "save_message(*)",
@@ -480,13 +489,14 @@ states = [
         "save_message": "save_message(*); save_message(*)",
     },
     {
-        "name":"recording",
-        "do":"start_recording()",
-        "save_message":"save_message(*)",
+        "name": "recording",
+        "do": "start_recording()",
+        "save_message": "save_message(*)",
     },
     {
-        "name":"exception",
-        "entry":"blink; vibrate",
+        "name": "exception",
+        "do": "vibrate",
+        "entry": "update_led(True); update_status('EXCEPTION')",
         "save_message": "save_message(*)",
     },
 ]

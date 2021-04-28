@@ -155,7 +155,8 @@ class ServerStm:
     def send_message(self):
         if self.handling_success:
             self._logger.debug("[Server]: response message sent")
-            self.component.mqtt_client.publish(self.mqtt_topic_output, self.response_message) 
+            if self.mqtt_topic_output != "":
+                self.component.mqtt_client.publish(self.mqtt_topic_output, self.response_message) 
         else:
             self._logger.error("[Server]: error message sent")
         # Terminates the stm

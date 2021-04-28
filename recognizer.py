@@ -118,11 +118,11 @@ if __name__ == "__main__":
     recognizer = Recognizer('lisa')
 
     t_i0 = {'source': 'initial', 'target': 'listening'}
-    t_01 = {'trigger': 'new_audio', 'source': 'listening', 'target': 'recognizing'}
+    t_01 = {'trigger': 'done', 'source': 'listening', 'target': 'recognizing'}
     t_10_a = {'trigger': 'recognition_error', 'source': 'recognizing', 'target': 'listening'}
     t_10_b = {'trigger': 'recognized', 'source': 'recognizing', 'function': recognizer.was_adressed}
 
-    s_listening = {'name': 'listening', 'entry': 'listen'}
+    s_listening = {'name': 'listening', 'do': 'listen'}
     s_recognizing = {'name': 'recognizing', 'entry': 'recognize'}
 
     stm = Machine(name='stm_recognizer', transitions=[t_i0, t_01, t_10_a, t_10_b], states=[s_listening, s_recognizing], obj=recognizer)
