@@ -93,26 +93,30 @@ class WalkieTalkie:
         self.app.setLabelFg("status", "white")
 
         def extract_btn_name(label):
-            label = label.lower()
-            if 'stop' in label:
-                self.stop_recording()
-                return 'stop'
-            elif 'send <' in label:
-                return 'send'
-            elif 'replay <' in label:
-                return 'replay'
-            elif 'replay' in label:
-                return 'replay'
-            elif 'next' in label:
-                return 'next'
-            elif 'play' in label:
-                return 'play'
             return None
 
 
-        def on_button_pressed_start(title):
-            command = extract_btn_name(title)
-            self.stm.send(command, kwargs={'action': 'send', 'argument': 'bob ross'})
+        def on_button_pressed_start(label):
+            label = label.lower()
+            command = label
+            if 'stop' in label:
+                self.stop_recording()
+                command = "stop"
+            elif 'send <' in label:
+                self.stm.send("send", kwargs={'action': 'send', 'argument': 'bob ross'})
+                command = "send"
+            elif 'replay <' in label:
+                self.stm.send("replay", kwargs={'action': 'replay', 'argument': 'bob ross'})
+                command = "replay"
+            elif 'replay' in label:
+                self.stm.send("replay")
+                command = "replay"
+            elif 'next' in label:
+                self.stm.send("next") 
+                command = "next"
+            elif 'play' in label:
+                self.stm.send("play")
+                command = "play"
             print("[ACTION]:", command)
             print("[STATE]:", self.stm.state)
         
@@ -151,7 +155,9 @@ class WalkieTalkie:
         th.start()
 
     def text_to_speech(self, text):
-        self.tts.speak(str(text))
+        th = Thread(target=self.tts.speak, args=[str(text)])
+        th.start()
+        #self.tts.speak(str(text))
 
     def register(self):
         msg = {
@@ -229,36 +235,27 @@ class WalkieTalkie:
             self.recorder.play("replay_message.wav")
             self.stm.send("replay_finished")
         except:
-            self.update_led(True)
-            self._logger.error(f'Payload could not be read!')
-            self.stm.send("replay_finished")
+            self.stm.send("could_not_be_played")
     
     def play_message(self):
         self.update_status("PLAYING")
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
-        if self.check_message_queue(1):
+        if self.check_message_queue(0):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
         else:
-            self.update_led(True)
-            # self.tts_error('ok')
-            self.stm.send('message_played')
+            self.stm.send("queue_empty")
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        self._logger.info(f'Playing message {queue_length}!')
-        if self.check_message_queue(2): # If not the last message
+        if self.check_message_queue(1): # If not the last message
             self.iterate_queue()
         else:
             self.iterate_queue()
-            self.update_led(True)
-            # self.tts_error('message_queue_empty')
-
-    def load_next_message_in_queue(self):
-            self.iterate_queue()
+            self.stm.send("queue_empty")
 
     def check_message_queue(self, i): # returns true if there are more than i messages left in queue
         if len(os.listdir("message_queue")) > i:
@@ -299,20 +296,10 @@ class WalkieTalkie:
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
-
-    def tts_error(self, exception):
-        if exception == "recipient_not_found":
-            msg = "Could not find recipient. Please try again."
-        elif exception == "empty_message_queue":
-            msg = "No more messages"
-        elif exception == "no_ack_received":
-            msg = "Could not connect. Please try again"
-        elif exception == "ok":
-            msg = "Message sent"
-        elif exception == "time_out":
-            msg = "Connection lost"
-        self.text_to_speech(msg)
-        self._logger.debug(msg)
+    
+    def error(self, message):
+        self.text_to_speech(message)
+        self._logger.debug(message)
     
     def update_status(self, text):
         if self.app != {}:
@@ -374,6 +361,12 @@ transitions = [
         'trigger': 'time_out',
         'effect': 'iterate_queue',
     },
+    {
+        'source': 'playing',
+        'target': 'exception',
+        'trigger': 'queue_empty',
+        "effect": "error('Message queue is empty')"
+    },
     # Request replay message
     {
         "source": "listening",
@@ -385,13 +378,13 @@ transitions = [
         "source": "check_replay_recipient",
         "target": "exception",
         "trigger": "recipient_not_found",
-        "effect": "tts_error('recipient_not_found')"
+        "effect": "error('Recipient not found')"
     },
     {
         "source": "check_replay_recipient",
         "target": "exception",
         "trigger": "time_out",
-        "effect": "tts_error('time_out')"
+        "effect": "error('Timed out')"
     },
     {
         "source": "check_replay_recipient",
@@ -408,6 +401,12 @@ transitions = [
         'target': 'listening',
         'trigger': 'replay_finished',
     },
+    {
+        'source': 'playing_replay',
+        'target': 'exception',
+        'trigger': 'could_not_be_played',
+        "effect":"error('Retreived message could not be played')"
+    },
     # Check recipient
     {
         "source":"listening",
@@ -419,13 +418,13 @@ transitions = [
         "source":"check_recipient",
         "target":"exception",
         "trigger":"recipient_not_found",
-        "effect":"tts_error('recipient_not_found')"
+        "effect":"error('Recipient not found')"
     },
     {
         "source":"check_recipient",
         "target":"exception",
         "trigger":"time_out",
-        "effect":"tts_error('time_out')"
+        "effect":"error('Timed out')"
     },
     {
         "source":"check_recipient",
@@ -437,13 +436,13 @@ transitions = [
         "source":"recording",
         "target":"listening",
         "trigger":"done",
-        "effect":"send_data; tts_error('ok')"
+        "effect":"send_data; text_to_speech('Message sent')"
     },
     # Exceptions
     {
         "source":"exception",
         "target":"listening",
-        "trigger":"done"
+        "trigger":"error_done"
     },
 ]
 
@@ -453,7 +452,7 @@ states = [
     {
         "name":"listening",
         "do": "update_status('LISTENING')",
-        "entry": "update_led(False)"
+        "entry": "update_led(False)",
         "register": "register()",
         "save_message": "save_message(*)",
     },
@@ -495,7 +494,7 @@ states = [
     {
         "name": "exception",
         "do": "vibrate",
-        "entry": "update_led(True); update_status('EXCEPTION')",
+        "entry": "update_led(True); update_status('EXCEPTION'); start_timer('error_done',3000)",
         "save_message": "save_message(*)",
     },
 ]
