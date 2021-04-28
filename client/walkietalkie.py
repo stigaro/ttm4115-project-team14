@@ -60,7 +60,6 @@ class WalkieTalkie:
 
         self.recorder = Recorder()
         self.tts = Speaker()
-        # self.recognizer = Recognizer()
 
         self.uuid = uuid4().hex
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
@@ -99,10 +98,8 @@ class WalkieTalkie:
                 self.stop_recording()
                 return 'stop'
             elif 'send <' in label:
-                # Wont work as of now
-                return 'talking'
+                return 'send'
             elif 'replay <' in label:
-                # Wont work as of now
                 self.update_status('REPLAYING')
                 return 'replay'
             elif 'replay' in label:
@@ -117,7 +114,7 @@ class WalkieTalkie:
 
         def on_button_pressed_start(title):
             command = extract_btn_name(title)
-            self.stm.send(command)
+            self.stm.send(command, kwargs={'action': 'send', 'argument': 'bob ross'})
             print("[ACTION]:", command)
             print("[STATE]:", self.stm.state)
         
@@ -257,7 +254,6 @@ class WalkieTalkie:
             self.iterate_queue()
             self.update_led(True)
             # self.tts_error('message_queue_empty')
-            # self.tts_error('no_ack_received')
 
     def load_next_message_in_queue(self):
             self.iterate_queue()
