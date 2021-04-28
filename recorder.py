@@ -13,34 +13,6 @@ class Recorder:
         self.filename = "output.wav"
         self.p = pyaudio.PyAudio()
 
-    # Creates the appJar gui, handling the button events
-    def create_gui(self):
-        self.app = gui("Walkie Talkie", "320x568", bg='yellow')
-        self.app.setBgImage("bg.gif")
-        def extract_timer_name(label):
-            label = label.lower()
-            if 'stop' in label:
-                return 'stop'
-            elif 'record' in label:
-                return 'record'
-            elif 'play' in label:
-                return 'play'
-            return None
-
-        #self.app.startLabelFrame('Audio recording and playback')
-
-        def on_button_pressed_start(title):
-            command = extract_timer_name(title)
-            self.stm.send(command)  # Start recording
-            print("[ACTION]:", command)
-
-        self.app.addButton('Record', on_button_pressed_start)
-        self.app.addButton('Play', on_button_pressed_start)
-        self.app.addButton('Stop recording', on_button_pressed_start)
-        #self.app.stopLabelFrame()
-
-        self.app.go()
-
     def record(self):
         stream = self.p.open(format=self.sample_format,
                              channels=self.channels,
@@ -59,12 +31,7 @@ class Recorder:
         stream.close()
         # Terminate the PortAudio interface
         self.p.terminate()
-
-    def stop(self):
-        print("[ACTION]: stop")
-        self.recording = False
-
-    def process(self):
+        # Process the audio
         print("[RECORDING]: processing")
         # Save the recorded data as a WAV file
         wf = wave.open(self.filename, 'wb')
@@ -73,6 +40,10 @@ class Recorder:
         wf.setframerate(self.fs)
         wf.writeframes(b''.join(self.frames))
         wf.close()
+
+    def stop(self):
+        print("[ACTION]: stop")
+        self.recording = False
 
     def play(self, filename):
         # filename = 'output.wav'
@@ -112,9 +83,8 @@ if __name__ == "__main__":
 
     s_playing = {'name': 'playing', 'do': 'play("output.wav")'}
     s_recording = {'name': 'recording', 'do': 'record()', "stop": "stop()"}
-    s_processing = {'name': 'processing', 'do': 'process()'}
 
-    stm = Machine(name='stm', transitions=[t0, t11, t12, t21, t22, t23], states=[s_playing, s_recording, s_processing], obj=recorder)
+    stm = Machine(name='stm', transitions=[t0, t11, t12, t21, t22, t23], states=[s_playing, s_recording], obj=recorder)
     recorder.stm = stm
 
     driver = Driver()

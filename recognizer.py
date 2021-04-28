@@ -14,7 +14,7 @@ class Recognizer:
     """
 
     recognizable_action_words = [
-        'send message',
+        'send',
         'replay',
         'next',
         'play'
@@ -33,15 +33,22 @@ class Recognizer:
         # Prepares recognition. By default we only send the last activation keyword string
         recognition_string = self.recognition.split(self.recognition_word)[-1].lstrip()
 
-        # Finds the latest recognizable action word
+        # Finds the first recognizable action word
         recognized_action_word = None
+        action_word_index = 0
         for action_word in Recognizer.recognizable_action_words:
             # https://stackoverflow.com/questions/4154961/find-substring-in-string-but-only-if-whole-words
-            if re.search(r"\b" + re.escape(action_word) + r"\b", recognition_string):
-                recognized_action_word = action_word
+            print(action_word, recognition_string)
+            action_word_index = recognition_string.find(action_word)
+            if action_word_index != -1:
+                recognized_action_word = action_word.replace(" ", "_")
+                break
 
+        recognition_argument = ""
         # Splits the string into arguments by keyword reduction function definition
-        recognition_argument = recognition_string.split(recognized_action_word)[-1]
+        if recognized_action_word != None:
+            recognition_argument = recognition_string[action_word_index+len(recognized_action_word)::].strip()
+            print(recognition_argument)
 
         return dict({
             'action': recognized_action_word,
@@ -50,11 +57,11 @@ class Recognizer:
 
     def update_observers(self):
         recognition_dictionary = self.parse_recognition_to_arguments()
-        print("[ACTION_FOUND]: '{}'".format(recognition_dictionary))
 
         if recognition_dictionary['action'] is None:
             return  # If there is no recognizable action we avoid sending
 
+        print("[ACTION_FOUND]: '{}'".format(recognition_dictionary))
         # Update all observers with action
         for stm_observer in self.stm_observers:
             try:
@@ -77,7 +84,6 @@ class Recognizer:
         with self.microphone as microphone:
             self.speech_converter.adjust_for_ambient_noise(microphone)
             self.audio = self.speech_converter.listen(microphone)
-        self.stm.send("new_audio")
 
     def recognize(self):
         try:
@@ -95,11 +101,11 @@ def get_state_machine(name: str, observers: list):
     recognizer = Recognizer( recognition_keyword='lisa', stm_observers=observers)
 
     t_i0 = {'source': 'initial', 'target': 'listening'}
-    t_01 = {'trigger': 'new_audio', 'source': 'listening', 'target': 'recognizing'}
+    t_01 = {'trigger': 'done', 'source': 'listening', 'target': 'recognizing'}
     t_10_a = {'trigger': 'recognition_error', 'source': 'recognizing', 'target': 'listening'}
     t_10_b = {'trigger': 'recognized', 'source': 'recognizing', 'function': recognizer.was_adressed}
 
-    s_listening = {'name': 'listening', 'entry': 'listen'}
+    s_listening = {'name': 'listening', 'do': 'listen'}
     s_recognizing = {'name': 'recognizing', 'entry': 'recognize'}
 
     stm = Machine(name=name, transitions=[t_i0, t_01, t_10_a, t_10_b], states=[s_listening, s_recognizing], obj=recognizer)

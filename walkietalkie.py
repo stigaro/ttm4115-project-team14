@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import logging
 import json
 import base64
+import time
 from appJar import gui
 from recognizer import get_state_machine
 from recorder import Recorder
@@ -65,10 +66,11 @@ class WalkieTalkie:
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
-        self.name = "Christopher"
+        self.name = "christopher"
         stm_walkie_talkie_name = "{}_walkie_talkie".format(self.name)
         walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name=stm_walkie_talkie_name)
         self.stm = walkie_talkie_machine
+        self.app = {}
 
         recognizer_stm = get_state_machine('stm_recognizer', [stm_walkie_talkie_name])
 
@@ -82,7 +84,7 @@ class WalkieTalkie:
         self.app = gui("Walkie Talkie", "320x568", bg='yellow')
         self.app.setStretch("both")
         self.app.setSticky("")
-        self.app.setBgImage("bg.gif")
+        self.app.setBgImage("images/bg.gif")
 
         if self.debug == True:
             self.app.setInPadding([40,40])
@@ -93,9 +95,13 @@ class WalkieTalkie:
 
         def extract_btn_name(label):
             label = label.lower()
-            if 'send <' in label:
+            if 'stop' in label:
+                self.stop_recording()
+                return 'stop'
+            elif 'send <' in label:
                 return 'talking'
             elif 'replay <' in label:
+                self.update_status('REPLAY')
                 return 'request_replay_message'
             elif 'replay' in label:
                 return 'replay_message'
@@ -104,7 +110,8 @@ class WalkieTalkie:
                 return 'next'
             elif 'play' in label:
                 #self.app.setLabel("status", "State: PLAYING")
-                #self.app.setBgImage("bg_green.gif")
+                #self.app.setBgImage("images/bg_green.gif")
+                self.update_status('PLAYING')
                 return 'play_message'
             return None
 
@@ -113,7 +120,7 @@ class WalkieTalkie:
             command = extract_btn_name(title)
             self.stm.send(command)
             print("[ACTION]:", command)
-            print("[ACTION]:", self.stm.state)
+            print("[STATE]:", self.stm.state)
         
         if self.debug == True:
             self.app.setPadding([0,0])
@@ -122,6 +129,7 @@ class WalkieTalkie:
             self.app.setStretch("both")
             self.app.setSticky("news")
             self.app.addButton('Send <name>', on_button_pressed_start)
+            self.app.addButton('Stop recording', on_button_pressed_start)
             self.app.addButton('Play', on_button_pressed_start)
             self.app.addButton('Replay', on_button_pressed_start)
             self.app.addButton('Next', on_button_pressed_start)
@@ -130,6 +138,8 @@ class WalkieTalkie:
         else:
             self.app.setTransparency(0)
             self.app.addLabel("padding", "", 1, 0)
+        self.update_led(False)
+        self.update_status('LISTENING')
         self.app.go()
 
     def on_init(self):
@@ -159,14 +169,15 @@ class WalkieTalkie:
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
 
-    def query_server(self, recipient): # check if recipient is registered
-        msg = {
-            "command":"query",
-            "device_id_from":self.uuid,
-            "recipient_name":recipient
-        }
-        json_msg = json.dumps(msg)
-        self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
+    def query_server(self, **kwargs): # check if recipient is registered
+        if kwargs.get("argument") and kwargs.get("action"):
+            msg = {
+                "command":"query",
+                "device_id_from":self.uuid,
+                "recipient_name": kwargs.get("argument")
+            }
+            json_msg = json.dumps(msg)
+            self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
 
         '''
         request:
@@ -176,17 +187,20 @@ class WalkieTalkie:
         {"device_id_from": sender, "recipient_name": name, "exists": true/false}
         '''
 
-    def start_recording(self, args):
-        print(args["recognition_string"])
+    def start_recording(self):
+        self.update_status("RECORDING")
         self.recorder.record()
 
     def stop_recording(self):
+        self.update_status("STOP RECORDING")
         self.recorder.stop()
-
+    
+    # Parses server responses
     def parse_message(self, payload):
         if payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
         elif payload.get('exists') == True: # if recipient exists
+            self.recipient = payload.get("recipient_name")
             self.stm.send("recipient_ok")
         elif payload.get('exists') == False: # if recipient does not exists
             self.stm.send("recipient_not_found")
@@ -198,14 +212,16 @@ class WalkieTalkie:
             # Retreive message from payload
             wf = payload.get('data')
             data = base64.b64decode(wf)
-            # self._logger.error(data)
-            # Get queue length
+            # Get queue length and saves message in the FIFO order
             queue_number = len(os.listdir("message_queue"))+1
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
+            self.update_led(False)
         except:
             self._logger.error(f'Payload could not be read!')
+        # TODO
+        self.check_message_queue(0)
 
     def play_replay_message(self, payload):
         try:
@@ -218,19 +234,36 @@ class WalkieTalkie:
             self.recorder.play("replay_message.wav")
             self.stm.send("replay_finished")
         except:
-            # TODO
+            self.update_led(True)
             self._logger.error(f'Payload could not be read!')
             self.stm.send("replay_finished")
             pass
-
+    
     def play_message(self):
         # Check queue length
+        queue_folder = "message_queue"
+        queue_length = len(os.listdir(queue_folder))
         if self.check_message_queue(0):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play("message_queue/1.wav")
             self.stm.send('message_played')
         else:
-            self.tts_error('message_queue_empty')
+            self.update_led(True)
+            # self.tts_error('ok')
+            self.stm.send('message_played')
+    
+    def load_next_message_in_queue(self):
+        queue_folder = "message_queue"
+        queue_length = len(os.listdir(queue_folder))
+        # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
+        if queue_length > 1: # If not the last message
+            # self.tts_error('message_queue_empty')
+            self.iterate_queue()
+        else:
+            self.iterate_queue()
+            self.update_led(True)
+            # self.tts_error('no_ack_received')
+            return False
 
     def load_next_message_in_queue(self):
         if self.check_message_queue(1):
@@ -251,7 +284,9 @@ class WalkieTalkie:
                 os.remove(f"{queue_folder}/{filename}")
             else:
                 os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
+        self.update_led(False)
 
+    # Request replay message from the server
     def play_latest_user_message(self):
         name = "bob ross"
         uuid = self.uuid
@@ -266,12 +301,12 @@ class WalkieTalkie:
     def send_data(self):
         filename = self.recorder.filename
         byte_data = open(filename, 'rb')
-        data = base64.b64encode(byte_data)
+        data = base64.b64encode(byte_data.read())
         msg = {
             "device_id_from":self.uuid,
-            "device_owner_name_to":"recipient",
-            "command":"message",
-            "data":data
+            "device_owner_name_to": self.recipient,
+            "command": "message",
+            "data": data.decode()
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
@@ -289,16 +324,33 @@ class WalkieTalkie:
             msg = "Connection lost"
         self.text_to_speech(msg)
         self._logger.debug(msg)
+    
+    def update_status(self, text):
+        if self.app != {}:
+            label = "State:"+text
+            self.app.setLabel("status", label)
+
+    def update_led(self,is_error):
+        if is_error:
+            self.app.setBgImage("images/bg_red.gif")
+        else:
+            # Blink green if there's message in queue
+            queue_folder = "message_queue"
+            queue_length = len(os.listdir(queue_folder))
+            if queue_length > 0:
+                self.app.setBgImage("images/bg_green.gif")
+            else:
+                self.app.setBgImage("images/bg.gif")
 
     def blink(self):
-        print("*Intense blinking*")
-
+        self._logger.debug("*Intense blinking*")
+    
     def stop_blink(self):
         print("*Blinking stopped!*")
 
     def vibrate(self):
         self.recorder.play("vibrate.wav")
-        print("Walkie goes brrrrrr...")
+        self._logger.debug("Walkie goes brrrrrr...")
 
     def stop(self):
         # stop the MQTT client
@@ -325,6 +377,7 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay_message",
+        "effect": "stop_timer('time_out')",
     },
     {
         "source": "playing",
@@ -354,11 +407,12 @@ transitions = [
         'target': 'listening',
         'trigger': 'replay_finished',
     },
-    # check recipient
+    # Check recipient
     {
         "source":"listening",
         "target":"check_recipient",
         "trigger":"send",
+        "effect": "query_server(*)",
     },
     {
         "source":"check_recipient",
@@ -397,43 +451,43 @@ transitions = [
 states = [
     {
         "name":"listening",
-        "register":"register()",
-        "save_message":"save_message(*)",
-        "entry":"check_message_queue"
+        "do": "update_status('LISTENING')",
+        "register": "register()",
+        "save_message": "save_message(*)",
     },
     {
         "name":"check_recipient",
-        "entry":"query_server(*); start_timer('time_out',3000)",
+        "entry":"start_timer('time_out',3000)",
         "exit":"stop_timer('time_out')",
         "save_message":"save_message(*)",
     },
     {
         "name":"replay",
         "do": "play_latest_user_message()",
-        "save_message":"save_message(*)",
+        "save_message": "save_message(*)",
     },
     {
         "name":"playing_replay",
         "do": "play_replay_message(*)",
         "replay_save_message": "defer",
-        "save_message":"save_message(*)",
+        "save_message": "save_message(*)",
     },
     {
         "name":"playing",
         "do": "play_message()",
         "entry": "stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
-        "save_message":"save_message(*)",
+        "save_message": "save_message(*); save_message(*)",
     },
     {
         "name":"recording",
-        "entry":"start_recording(*)",
+        "do":"start_recording()",
         "save_message":"save_message(*)",
     },
     {
         "name":"exception",
         "entry":"blink; vibrate",
-        "save_message":"save_message(*)",
+        "save_message": "save_message(*)",
     },
 ]
 
