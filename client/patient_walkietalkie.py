@@ -295,7 +295,7 @@ class WalkieTalkie:
 
     def check_queue(self):
         if self.message_in_queue:
-            time.sleep(2)
+            time.sleep(3)
             self.stm.send("play_message")
 
     def vibrate(self):
