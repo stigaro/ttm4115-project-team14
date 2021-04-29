@@ -68,6 +68,17 @@ class ServerStm:
             self._logger.debug(f'Error loading the walkie talkie log file!')
         return ""
 
+    def get_sender_name(self, sender_id):
+        try:
+            with open(self.wtlog_filename, 'r') as json_file:
+                data = json.load(json_file)
+                for uuid, name in data.items():
+                    if uuid == sender_id:
+                        return name
+        except:
+            self._logger.debug(f'Error loading the walkie talkie log file!')
+        return ""
+
     def build_response(self):
         self._logger.debug("[Server]: building response...")
         command = self.payload.get('command')
@@ -75,6 +86,8 @@ class ServerStm:
             if command == "message": # {"device_id_from": 1, "device_owner_name_to": name, "command" : "message", "data": "b64encoded data"}
                 # Get sender
                 sender = self.payload.get('device_id_from')
+                # Get sender name
+                sender_name = self.get_sender_name(sender)
                 # Get receiver
                 receiver_name = self.payload.get('device_owner_name_to')
                 # Get receiver uuid
@@ -89,12 +102,14 @@ class ServerStm:
                     fil.write(wf)
                     self._logger.debug(f'Message saved to /stored_messages/{sender}-{receiver}.wav')
                 # Send to receiver
-                payload = {"device_id_from": sender, "device_id_to": receiver, "command": "message", "data": data}
+                payload = {"device_owner_name_from": sender_name, "device_id_to": receiver, "command": "message", "data": data}
                 self.response_message = json.dumps(payload)
                 self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(receiver)
             elif command == "replay": # {"device_id_from": 1, "device_owner_name_to": name, "command" : "replay"}
                 # Get sender
                 sender = self.payload.get('device_id_from')
+                # Get sender name
+                sender_name = self.get_sender_name(sender)
                 # Get receiver
                 receiver_name = self.payload.get('device_owner_name_to')
                 # Get receiver uuid
@@ -108,7 +123,7 @@ class ServerStm:
                 self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
                 data = base64.b64encode(wf.read())
                 # Send message back to sender
-                payload = {"device_id_from": sender, "device_id_to": receiver, "data": data.decode()}
+                payload = {"device_owner_name_from": sender_name, "device_id_to": receiver, "command": "reply", "data": data.decode()}
                 self.response_message = json.dumps(payload)
                 self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
             elif command == "register": # {"uuid": uuid, "name": name, "command": "register"}
@@ -204,8 +219,6 @@ class ServerStm:
         server_stm = stmpy.Machine(name=server_name, transitions=[t0,t1,t2,t3,t4], states=[s0,s1],
                                   obj=server_logic)
         server_logic.stm = server_stm
-        with open("graph.gv", "w") as f:
-            f.write(stmpy.get_graphviz_dot(server_stm))
         return server_stm
 
 class Server:

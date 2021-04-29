@@ -59,7 +59,7 @@ class WalkieTalkie:
         self.debug = True
 
         self.recorder = Recorder(self)
-        self.tts = Speaker()
+        self.text_to_speech = Speaker()
 
         self.uuid = uuid4().hex
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
@@ -155,9 +155,9 @@ class WalkieTalkie:
         th.start()
 
     def tts(self, text):
-        th = Thread(target=self.tts.speak, args=[str(text)])
+        th = Thread(target=self.text_to_speech.speak, args=[str(text)])
         th.start()
-        self._logger.debug(message)
+        self._logger.debug(text)
 
     def register(self):
         msg = {
@@ -211,6 +211,8 @@ class WalkieTalkie:
 
     def save_message(self, payload):
         try:
+            sender_name = payload.get('device_owner_name_from')
+            self.tts(f"Received message from {sender_name}")
             # Retreive message from payload
             wf = payload.get('data')
             data = base64.b64decode(wf)
@@ -246,6 +248,7 @@ class WalkieTalkie:
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
+            self.update_led(False,1)
         else:
             self.stm.send("queue_empty")
     
@@ -302,14 +305,14 @@ class WalkieTalkie:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error):
+    def update_led(self,is_error,queue_pad = 0):
         if is_error:
             self.app.setBgImage("images/bg_red.gif")
         else:
             # Blink green if there's message in queue
             queue_folder = "message_queue"
             queue_length = len(os.listdir(queue_folder))
-            if queue_length > 0:
+            if queue_length-queue_pad > 0:
                 self.app.setBgImage("images/bg_green.gif")
             else:
                 self.app.setBgImage("images/bg.gif")
@@ -426,7 +429,7 @@ transitions = [
         "source":"recording",
         "target":"listening",
         "trigger":"done",
-        "effect":"send_data; text_to_speech('Message sent')"
+        "effect":"send_data; tts('Message sent')"
     },
     # Exceptions
     {
