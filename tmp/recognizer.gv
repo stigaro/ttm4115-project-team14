@@ -1,0 +1,12 @@
+digraph G {
+node [shape=box style=rounded fontname=Helvetica];
+edge [ fontname=Helvetica ];
+initial [shape=point width=0.2];
+listening [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>listening</B></TD></TR>
+</TABLE>>];recognizing [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>recognizing</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / recognize()<BR/></TD></TR></TABLE>>];initial -> listening [label=" "]
+listening -> recognizing [label=" done"]
+recognizing -> listening [label=" recognition_error"]
+recognizing -> d_3 [label="was_adressed()"]
+d_3 [shape=diamond, style=filled, label="", fillcolor=black, height=0.3, width=0.3, fixedsize=true]
+}

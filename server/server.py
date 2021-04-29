@@ -155,12 +155,13 @@ class ServerStm:
     def send_message(self):
         if self.handling_success:
             self._logger.debug("[Server]: response message sent")
-            if self.mqtt_topic_output != "":
+            if self.mqtt_topic_output != MQTT_TOPIC_OUTPUT:
                 self.component.mqtt_client.publish(self.mqtt_topic_output, self.response_message) 
         else:
             self._logger.error("[Server]: error message sent")
-        # Terminates the stm
-        self.stm.terminate()
+
+        # Trigger message_sent and terminate
+        self.stm.send("message_sent")
         
     def create_machine(server_name, payload, component):
         server_logic = ServerStm(server_name, payload, component)
@@ -176,16 +177,20 @@ class ServerStm:
             'effect': 'handle_request'}
         # compound transition
         t2 = {
-            'source':'handle',
-            'trigger':'finished_handling',
+            'source': 'handle',
+            'trigger': 'finished_handling',
             'targets': 'send build',
             'function': server_logic.handle_compound_transition}
         # regular transitions
         t3 = {
+            'source': 'send',
+            'trigger': 'message_sent',
+            'target': 'final'}
+        t4 = {
             'source': 'build',
             'trigger': 'response_built',
             'target': 'send'}
-        t4 = {
+        t5 = {
             'source': 'build',
             'trigger': 'response_failed',
             'target': 'send'}

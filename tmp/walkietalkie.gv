@@ -3,28 +3,30 @@ node [shape=box style=rounded fontname=Helvetica];
 edge [ fontname=Helvetica ];
 initial [shape=point width=0.2];
 listening [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>listening</B></TD></TR>
-<HR/><TR><TD ALIGN="LEFT">register / register()<BR/>save_message / save_message(*)<BR/></TD></TR></TABLE>>];check_recipient [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>check_recipient</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / update_led(False)<BR/>register / register()<BR/>save_message / save_message(*)<BR/></TD></TR></TABLE>>];check_recipient [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>check_recipient</B></TD></TR>
 <HR/><TR><TD ALIGN="LEFT">entry / start_timer(time_out, 3000)<BR/>save_message / save_message(*)<BR/>exit / stop_timer(time_out)<BR/></TD></TR></TABLE>>];check_replay_recipient [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>check_replay_recipient</B></TD></TR>
 <HR/><TR><TD ALIGN="LEFT">entry / start_timer(time_out, 3000)<BR/>save_message / save_message(*)<BR/>exit / stop_timer(time_out)<BR/></TD></TR></TABLE>>];replay [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>replay</B></TD></TR>
 <HR/><TR><TD ALIGN="LEFT">save_message / save_message(*)<BR/></TD></TR></TABLE>>];playing_replay [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>playing_replay</B></TD></TR>
 <HR/><TR><TD ALIGN="LEFT">save_message / save_message(*)<BR/>replay_save_message / defer<BR/></TD></TR></TABLE>>];playing [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>playing</B></TD></TR>
 <HR/><TR><TD ALIGN="LEFT">entry / stop_timer(time_out)<BR/>message_played / start_timer('time_out',3000)<BR/>save_message / save_message(*); save_message(*)<BR/></TD></TR></TABLE>>];recording [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>recording</B></TD></TR>
 <HR/><TR><TD ALIGN="LEFT">save_message / save_message(*)<BR/></TD></TR></TABLE>>];exception [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>exception</B></TD></TR>
-<HR/><TR><TD ALIGN="LEFT">entry / update_led(True)<BR/>entry / self.update_status(EXCEPTION)<BR/>save_message / save_message(*)<BR/></TD></TR></TABLE>>];initial -> listening [label="  /on_init();\n"]
+<HR/><TR><TD ALIGN="LEFT">entry / update_led(True)<BR/>entry / update_status(EXCEPTION)<BR/>entry / start_timer(error_done, 3000)<BR/>save_message / save_message(*)<BR/></TD></TR></TABLE>>];initial -> listening [label="  /on_init();\n"]
 listening -> playing [label=" play"]
 playing -> playing [label=" replay /\nstop_timer(time_out);\n"]
 playing -> playing [label=" next /\nload_next_message_in_queue();\n"]
 playing -> listening [label=" time_out /\niterate_queue();\n"]
+playing -> exception [label=" queue_empty /\nerror(Message queue is empty);\n"]
 listening -> check_replay_recipient [label=" replay /\nquery_server(*);\n"]
-check_replay_recipient -> exception [label=" recipient_not_found /\ntts_error(recipient_not_found);\n"]
-check_replay_recipient -> exception [label=" time_out /\ntts_error(time_out);\n"]
+check_replay_recipient -> exception [label=" recipient_not_found /\nerror(Recipient not found);\n"]
+check_replay_recipient -> exception [label=" time_out /\nerror(Timed out);\n"]
 check_replay_recipient -> replay [label=" recipient_ok"]
 replay -> playing_replay [label=" replay_save_message"]
 playing_replay -> listening [label=" replay_finished"]
+playing_replay -> exception [label=" could_not_be_played /\nerror(Retreived message could not be played);\n"]
 listening -> check_recipient [label=" send /\nquery_server(*);\n"]
-check_recipient -> exception [label=" recipient_not_found /\ntts_error(recipient_not_found);\n"]
-check_recipient -> exception [label=" time_out /\ntts_error(time_out);\n"]
+check_recipient -> exception [label=" recipient_not_found /\nerror(Recipient not found);\n"]
+check_recipient -> exception [label=" time_out /\nerror(Timed out);\n"]
 check_recipient -> recording [label=" recipient_ok"]
-recording -> listening [label=" done /\nsend_data();\ntts_error(ok);\n"]
-exception -> listening [label=" done"]
+recording -> listening [label=" done /\nsend_data();\ntext_to_speech(Message sent);\n"]
+exception -> listening [label=" error_done"]
 }

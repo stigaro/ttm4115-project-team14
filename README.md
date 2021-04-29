@@ -20,4 +20,5 @@ pip install stmpy
 pip install PyAudio
 pip install SpeechRecognition
 pip install pydub
+pip install gTTS
 ```
