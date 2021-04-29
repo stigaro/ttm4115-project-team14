@@ -203,9 +203,9 @@ class WalkieTalkie:
             self.stm.send("save_message", args=[payload])
         elif payload.get('exists') == True: # if recipient exists
             self.recipient = payload.get("recipient_name")
-            self.stm.send("recipient_ok")
+            self.stm.send("query_ok")
         elif payload.get('exists') == False: # if recipient does not exists
-            self.stm.send("recipient_not_found")
+            self.stm.send("query_not_found")
         elif payload.get('data'):
             self.stm.send('replay_save_message', args=[payload])
 
@@ -369,26 +369,26 @@ transitions = [
     # Request replay message
     {
         "source": "listening",
-        "target": "check_replay_recipient",
+        "target": "check_replay_sender",
         "trigger": "replay",
         "effect": "query_server(*)",
     },
     {
-        "source": "check_replay_recipient",
+        "source": "check_replay_sender",
         "target": "exception",
-        "trigger": "recipient_not_found",
+        "trigger": "query_not_found",
         "effect": "tts('Recipient not found')"
     },
     {
-        "source": "check_replay_recipient",
+        "source": "check_replay_sender",
         "target": "exception",
         "trigger": "time_out",
-        "effect": "tts('Timed out')"
+        "effect": "tts('Connection lost')"
     },
     {
-        "source": "check_replay_recipient",
+        "source": "check_replay_sender",
         "target": "replay",
-        "trigger": "recipient_ok"
+        "trigger": "query_ok"
     },
     {
         'source': 'replay',
@@ -410,19 +410,19 @@ transitions = [
     {
         "source":"check_recipient",
         "target":"exception",
-        "trigger":"recipient_not_found",
+        "trigger":"query_not_found",
         "effect":"tts('Recipient not found')"
     },
     {
         "source":"check_recipient",
         "target":"exception",
         "trigger":"time_out",
-        "effect":"tts('Timed out')"
+        "effect":"tts('Connection lost')"
     },
     {
         "source":"check_recipient",
         "target":"recording",
-        "trigger":"recipient_ok"
+        "trigger":"query_ok"
     },
     # Recording
     {
@@ -456,7 +456,7 @@ states = [
         "save_message":"save_message(*)",
     },
     {
-        "name":"check_replay_recipient",
+        "name":"check_replay_sender",
         "entry":"start_timer('time_out',3000)",
         "exit":"stop_timer('time_out')",
         "save_message":"save_message(*)",
