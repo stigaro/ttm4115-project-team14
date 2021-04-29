@@ -2,18 +2,8 @@ from stmpy import Machine, Driver
 from os import system
 from gtts import gTTS
 from pydub import AudioSegment
-import logging
 import pyaudio
 import wave
-
-debug_level = logging.DEBUG
-logger = logging.getLogger('stmpy')
-logger.setLevel(debug_level)
-ch = logging.StreamHandler()
-ch.setLevel(debug_level)
-formatter = logging.Formatter('%(asctime)s - %(name)-12s - %(levelname)-8s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 
 class Speaker:
     def __init__(self):

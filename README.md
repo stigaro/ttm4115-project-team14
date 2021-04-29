@@ -32,3 +32,22 @@ python ./client/nurse_walkietalkie.py
 ```
 
 This will run both the server and the client, pressing `CTRL+C` in the terminal will exit both processes
+
+The Walkie talkies can be runned with the options `-d` or `--debug` for debugging
+
+## Usage
+
+To communicate with the walkie talkie a codeword following a keyword is needed.
+
+The codeword used to communicate with the walkie talkie is set to `Lisa` and the following keywords possible are listed under.
+
+### Keywords
+
+| Command       | Description                                          | Nurse | Patient |
+|---------------|------------------------------------------------------|-------|---------|
+| send <name>   | Send message to <name>                               | yes   |         |
+| replay <name> | Request replay of the latest message from the server | yes   |         |
+| play          | Play the messages in queue                           | yes   |         |
+| replay        | Replay the message played in queue                   | yes   | yes     |
+| next          | Iterate through the message queue                    | yes   |         |
+| help          | Send message to a randomly assigned nurse            |       | yes     |

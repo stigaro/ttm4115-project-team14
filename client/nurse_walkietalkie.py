@@ -4,6 +4,7 @@ import logging
 import json
 import base64
 import time
+import sys
 from appJar import gui
 from recognizer import get_state_machine
 from recorder import Recorder
@@ -51,25 +52,26 @@ class MQTT_Client:
             self.client.disconnect()
 
 class WalkieTalkie:
-    def __init__(self, transitions, states):
+    def __init__(self, transitions, states, debug):
         self.payload = {}
         self._logger = logging.getLogger(__name__)
         self._logger.info('logging under name {}.'.format(__name__))
         self._logger.info('Starting Component')
-        self.debug = True
+        self.debug = debug
+        self.app = None
 
         self.recorder = Recorder(self)
         self.text_to_speech = Speaker()
 
         self.uuid = uuid4().hex
-        self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
+        if self.debug:
+            self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
         self.name = "christopher"
         stm_walkie_talkie_name = "{}_walkie_talkie".format(self.name)
         walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name=stm_walkie_talkie_name)
         self.stm = walkie_talkie_machine
-        self.app = {}
 
         recognizer_stm = get_state_machine('stm_recognizer', [stm_walkie_talkie_name])
 
@@ -91,10 +93,6 @@ class WalkieTalkie:
         self.app.addLabel("status", "State: STATUS", 0, 0)
         self.app.setLabelBg("status", "#3e3e3e")
         self.app.setLabelFg("status", "white")
-
-        def extract_btn_name(label):
-            return None
-
 
         def on_button_pressed_start(label):
             label = label.lower()
@@ -302,21 +300,22 @@ class WalkieTalkie:
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
      
     def update_status(self, text):
-        if self.app != {}:
+        if self.app != None:
             label = "State:"+text
             self.app.setLabel("status", label)
 
     def update_led(self,is_error,queue_pad = 0):
-        if is_error:
-            self.app.setBgImage("images/bg_red.gif")
-        else:
-            # Blink green if there's message in queue
-            queue_folder = "message_queue"
-            queue_length = len(os.listdir(queue_folder))
-            if queue_length-queue_pad > 0:
-                self.app.setBgImage("images/bg_green.gif")
+        if self.app != None:
+            if is_error:
+                self.app.setBgImage("images/bg_red.gif")
             else:
-                self.app.setBgImage("images/bg.gif")
+                # Blink green if there's message in queue
+                queue_folder = "message_queue"
+                queue_length = len(os.listdir(queue_folder))
+                if queue_length-queue_pad > 0:
+                    self.app.setBgImage("images/bg_green.gif")
+                else:
+                    self.app.setBgImage("images/bg.gif")
 
     def vibrate(self):
         self.recorder.play("vibrate.wav")
@@ -493,8 +492,14 @@ states = [
     },
 ]
 
+debug = False
+debug_level = logging.ERROR
+if len(sys.argv) > 1:
+    if sys.argv[1] in ["-d", "--debug"]:
+        debug_level = logging.DEBUG
+        debug = True
+
 # Logging
-debug_level = logging.DEBUG
 logger = logging.getLogger(__name__)
 logger.setLevel(debug_level)
 ch = logging.StreamHandler()
@@ -503,4 +508,5 @@ formatter = logging.Formatter('%(asctime)s - %(name)-12s - %(levelname)-8s - %(m
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-walkie_talkie = WalkieTalkie(transitions, states)
+if __name__ == "__main__":
+    walkie_talkie = WalkieTalkie(transitions, states, debug)
