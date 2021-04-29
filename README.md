@@ -14,11 +14,21 @@ https://github.com/falkr/stmpy-notebooks
 - pip
 - ffmpeg
 
+### Installation
+
+1. Clone this repo `git@github.com:stigaro/ttm4115-project-team14.git`
 ```sh
-pip install appjar
-pip install stmpy
-pip install PyAudio
-pip install SpeechRecognition
-pip install pydub
-pip install gTTS
+pip install -r requirements.txt
 ```
+
+2. Start up the server by running
+```sh
+python ./server/server.py
+```
+
+3. Start up the client by running either `nurse_walkietalkie.py` or `patient_walkietalkie.py`
+```sh
+python ./client/nurse_walkietalkie.py
+```
+
+This will run both the server and the client, pressing `CTRL+C` in the terminal will exit both processes
