@@ -154,10 +154,10 @@ class WalkieTalkie:
         th = Thread(target=self.create_gui)
         th.start()
 
-    def text_to_speech(self, text):
+    def tts(self, text):
         th = Thread(target=self.tts.speak, args=[str(text)])
         th.start()
-        #self.tts.speak(str(text))
+        self._logger.debug(message)
 
     def register(self):
         msg = {
@@ -234,8 +234,8 @@ class WalkieTalkie:
                 self._logger.debug(f'Message saved to replay_message.wav')
             self.recorder.play("replay_message.wav")
             self.stm.send("replay_finished")
-        except:
-            self.stm.send("could_not_be_played")
+        except: # Should never happen, but added as insurance so the program doesn't throw an error and stops
+            self._logger.error(f'Payload could not be read!')
     
     def play_message(self):
         self.update_status("PLAYING")
@@ -296,11 +296,7 @@ class WalkieTalkie:
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
-    
-    def error(self, message):
-        self.text_to_speech(message)
-        self._logger.debug(message)
-    
+     
     def update_status(self, text):
         if self.app != {}:
             label = "State:"+text
@@ -365,7 +361,7 @@ transitions = [
         'source': 'playing',
         'target': 'exception',
         'trigger': 'queue_empty',
-        "effect": "error('Message queue is empty')"
+        "effect": "tts('Message queue is empty')"
     },
     # Request replay message
     {
@@ -378,13 +374,13 @@ transitions = [
         "source": "check_replay_recipient",
         "target": "exception",
         "trigger": "recipient_not_found",
-        "effect": "error('Recipient not found')"
+        "effect": "tts('Recipient not found')"
     },
     {
         "source": "check_replay_recipient",
         "target": "exception",
         "trigger": "time_out",
-        "effect": "error('Timed out')"
+        "effect": "tts('Timed out')"
     },
     {
         "source": "check_replay_recipient",
@@ -401,12 +397,6 @@ transitions = [
         'target': 'listening',
         'trigger': 'replay_finished',
     },
-    {
-        'source': 'playing_replay',
-        'target': 'exception',
-        'trigger': 'could_not_be_played',
-        "effect":"error('Retreived message could not be played')"
-    },
     # Check recipient
     {
         "source":"listening",
@@ -418,13 +408,13 @@ transitions = [
         "source":"check_recipient",
         "target":"exception",
         "trigger":"recipient_not_found",
-        "effect":"error('Recipient not found')"
+        "effect":"tts('Recipient not found')"
     },
     {
         "source":"check_recipient",
         "target":"exception",
         "trigger":"time_out",
-        "effect":"error('Timed out')"
+        "effect":"tts('Timed out')"
     },
     {
         "source":"check_recipient",
