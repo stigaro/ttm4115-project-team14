@@ -55,7 +55,6 @@ class Recorder:
         return max(as_ints) < 1000
 
     def record(self):
-        # Init microphone stream using callback
         self.p = pyaudio.PyAudio()
         stream = self.p.open(format=self.sample_format,
                              channels=self.channels,

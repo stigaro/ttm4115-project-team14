@@ -1,0 +1,7 @@
+appJar==0.94.0
+graphviz==0.16
+gTTS==2.2.2
+PyAudio==0.2.11
+pydub==0.25.1
+SpeechRecognition==3.8.1
+stmpy==0.7.5
