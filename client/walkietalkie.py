@@ -59,7 +59,7 @@ class WalkieTalkie:
         self.debug = True
 
         self.recorder = Recorder(self)
-        self.tts = Speaker()
+        self.text_to_speech = Speaker()
 
         self.uuid = uuid4().hex
         self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
@@ -154,10 +154,10 @@ class WalkieTalkie:
         th = Thread(target=self.create_gui)
         th.start()
 
-    def text_to_speech(self, text):
-        th = Thread(target=self.tts.speak, args=[str(text)])
+    def tts(self, text):
+        th = Thread(target=self.text_to_speech.speak, args=[str(text)])
         th.start()
-        #self.tts.speak(str(text))
+        self._logger.debug(text)
 
     def register(self):
         msg = {
@@ -203,14 +203,16 @@ class WalkieTalkie:
             self.stm.send("save_message", args=[payload])
         elif payload.get('exists') == True: # if recipient exists
             self.recipient = payload.get("recipient_name")
-            self.stm.send("recipient_ok")
+            self.stm.send("query_ok")
         elif payload.get('exists') == False: # if recipient does not exists
-            self.stm.send("recipient_not_found")
+            self.stm.send("query_not_found")
         elif payload.get('data'):
             self.stm.send('replay_save_message', args=[payload])
 
     def save_message(self, payload):
         try:
+            sender_name = payload.get('device_owner_name_from')
+            self.tts(f"Received message from {sender_name}")
             # Retreive message from payload
             wf = payload.get('data')
             data = base64.b64decode(wf)
@@ -234,8 +236,8 @@ class WalkieTalkie:
                 self._logger.debug(f'Message saved to replay_message.wav')
             self.recorder.play("replay_message.wav")
             self.stm.send("replay_finished")
-        except:
-            self.stm.send("could_not_be_played")
+        except: # Should never happen, but added as insurance so the program doesn't throw an error and stops
+            self._logger.error(f'Payload could not be read!')
     
     def play_message(self):
         self.update_status("PLAYING")
@@ -246,6 +248,7 @@ class WalkieTalkie:
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
+            self.update_led(False,1)
         else:
             self.stm.send("queue_empty")
     
@@ -296,24 +299,20 @@ class WalkieTalkie:
         }
         json_msg = json.dumps(msg)
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT,json_msg)
-    
-    def error(self, message):
-        self.text_to_speech(message)
-        self._logger.debug(message)
-    
+     
     def update_status(self, text):
         if self.app != {}:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error):
+    def update_led(self,is_error,queue_pad = 0):
         if is_error:
             self.app.setBgImage("images/bg_red.gif")
         else:
             # Blink green if there's message in queue
             queue_folder = "message_queue"
             queue_length = len(os.listdir(queue_folder))
-            if queue_length > 0:
+            if queue_length-queue_pad > 0:
                 self.app.setBgImage("images/bg_green.gif")
             else:
                 self.app.setBgImage("images/bg.gif")
@@ -365,31 +364,31 @@ transitions = [
         'source': 'playing',
         'target': 'exception',
         'trigger': 'queue_empty',
-        "effect": "error('Message queue is empty')"
+        "effect": "tts('Message queue is empty')"
     },
     # Request replay message
     {
         "source": "listening",
-        "target": "check_replay_recipient",
+        "target": "check_replay_sender",
         "trigger": "replay",
         "effect": "query_server(*)",
     },
     {
-        "source": "check_replay_recipient",
+        "source": "check_replay_sender",
         "target": "exception",
-        "trigger": "recipient_not_found",
-        "effect": "error('Recipient not found')"
+        "trigger": "query_not_found",
+        "effect": "tts('Recipient not found')"
     },
     {
-        "source": "check_replay_recipient",
+        "source": "check_replay_sender",
         "target": "exception",
         "trigger": "time_out",
-        "effect": "error('Timed out')"
+        "effect": "tts('Connection lost')"
     },
     {
-        "source": "check_replay_recipient",
+        "source": "check_replay_sender",
         "target": "replay",
-        "trigger": "recipient_ok"
+        "trigger": "query_ok"
     },
     {
         'source': 'replay',
@@ -401,12 +400,6 @@ transitions = [
         'target': 'listening',
         'trigger': 'replay_finished',
     },
-    {
-        'source': 'playing_replay',
-        'target': 'exception',
-        'trigger': 'could_not_be_played',
-        "effect":"error('Retreived message could not be played')"
-    },
     # Check recipient
     {
         "source":"listening",
@@ -417,26 +410,26 @@ transitions = [
     {
         "source":"check_recipient",
         "target":"exception",
-        "trigger":"recipient_not_found",
-        "effect":"error('Recipient not found')"
+        "trigger":"query_not_found",
+        "effect":"tts('Recipient not found')"
     },
     {
         "source":"check_recipient",
         "target":"exception",
         "trigger":"time_out",
-        "effect":"error('Timed out')"
+        "effect":"tts('Connection lost')"
     },
     {
         "source":"check_recipient",
         "target":"recording",
-        "trigger":"recipient_ok"
+        "trigger":"query_ok"
     },
     # Recording
     {
         "source":"recording",
         "target":"listening",
         "trigger":"done",
-        "effect":"send_data; text_to_speech('Message sent')"
+        "effect":"send_data; tts('Message sent')"
     },
     # Exceptions
     {
@@ -463,7 +456,7 @@ states = [
         "save_message":"save_message(*)",
     },
     {
-        "name":"check_replay_recipient",
+        "name":"check_replay_sender",
         "entry":"start_timer('time_out',3000)",
         "exit":"stop_timer('time_out')",
         "save_message":"save_message(*)",
