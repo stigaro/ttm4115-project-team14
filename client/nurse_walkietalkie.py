@@ -153,7 +153,8 @@ class WalkieTalkie:
         # Create GUI in a new thread
         th = Thread(target=self.create_gui)
         th.start()
-
+    
+    # Text-to-speech
     def tts(self, text):
         th = Thread(target=self.text_to_speech.speak, args=[str(text)])
         th.start()
@@ -169,7 +170,7 @@ class WalkieTalkie:
         self.mqtt_client.publish(MQTT_TOPIC_OUTPUT, json_msg)
         print(self.uuid)
 
-    def query_server(self, **kwargs): # check if recipient is registered
+    def query_server(self, **kwargs): # check if recipient/sender is registered
         if kwargs.get("argument") and kwargs.get("action"):
             msg = {
                 "command":"query",

@@ -6,6 +6,7 @@ import json
 import wave
 import base64
 import os
+import random
 
 MQTT_BROKER = 'mqtt.item.ntnu.no'
 MQTT_PORT = 1883
@@ -78,6 +79,19 @@ class ServerStm:
         except:
             self._logger.debug(f'Error loading the walkie talkie log file!')
         return ""
+    
+    def get_nurse_name(self):
+        nurses = []
+        try:
+            with open(self.wtlog_filename, 'r') as json_file:
+                data = json.load(json_file)
+                for uuid, name in data.items():
+                    if "patient" not in name:
+                        nurses.append(name)
+                return random.choice(nurses)
+        except:
+            self._logger.debug(f'Error loading the walkie talkie log file!')
+        return ""
 
     def build_response(self):
         self._logger.debug("[Server]: building response...")
@@ -147,6 +161,12 @@ class ServerStm:
                         json.dump(data, outfile, indent=2)
                     self._logger.info(f'Registering new user {uuid} with name: {name}')
                 self.get_receiver_uuid("bob ross")
+                # Send response if the requester is a patient walkie talkie
+                if self.payload.get("patient") != None:
+                    nurse_name = self.get_nurse_name()
+                    payload = {"device_id_from": uuid, "nurse": nurse_name, "command": "register"}
+                    self.response_message = json.dumps(payload)
+                    self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(uuid)
             elif command == "query": # {"device_id_from": uuid, "recipient_name": name, "command" : "query" }
                 # Get sender's uuid and recipient name from request
                 sender = self.payload.get("device_id_from")

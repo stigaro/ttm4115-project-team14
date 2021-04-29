@@ -14,6 +14,7 @@ class Recognizer:
     """
 
     recognizable_action_words = [
+        'help',
         'send',
         'replay',
         'next',
@@ -37,7 +38,6 @@ class Recognizer:
         recognized_action_word = None
         action_word_index = 0
         for action_word in Recognizer.recognizable_action_words:
-            # https://stackoverflow.com/questions/4154961/find-substring-in-string-but-only-if-whole-words
             print(action_word, recognition_string)
             action_word_index = recognition_string.find(action_word)
             if action_word_index != -1:

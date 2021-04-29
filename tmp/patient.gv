@@ -1,0 +1,22 @@
+digraph G {
+node [shape=box style=rounded fontname=Helvetica];
+edge [ fontname=Helvetica ];
+initial [shape=point width=0.2];
+listening [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>listening</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / update_led(False)<BR/>register / register()<BR/>update_nurse / update_nurse(*)<BR/>save_message / save_message(*)<BR/></TD></TR></TABLE>>];replay [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>replay</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">save_message / save_message(*)<BR/></TD></TR></TABLE>>];playing_replay [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>playing_replay</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">save_message / save_message(*)<BR/>replay_save_message / defer<BR/></TD></TR></TABLE>>];playing [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>playing</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / stop_timer(time_out)<BR/>message_played / start_timer('time_out',3000)<BR/>save_message / save_message(*); save_message(*)<BR/></TD></TR></TABLE>>];recording [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>recording</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">save_message / save_message(*)<BR/></TD></TR></TABLE>>];exception [shape=plaintext margin=0 label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" STYLE="ROUNDED"><TR><TD><B>exception</B></TD></TR>
+<HR/><TR><TD ALIGN="LEFT">entry / update_led(True)<BR/>entry / update_status(EXCEPTION)<BR/>entry / start_timer(error_done, 3000)<BR/>save_message / save_message(*)<BR/></TD></TR></TABLE>>];initial -> listening [label="  /on_init();\n"]
+listening -> playing [label=" play"]
+playing -> playing [label=" replay /\nstop_timer(time_out);\n"]
+playing -> playing [label=" time_out /\nload_next_message_in_queue();\n"]
+playing -> listening [label=" queue_empty /\niterate_queue();\n"]
+listening -> replay [label=" replay"]
+replay -> playing_replay [label=" replay_save_message"]
+playing_replay -> listening [label=" replay_finished"]
+listening -> recording [label=" help"]
+recording -> listening [label=" done /\nsend_data();\ntts(Message sent);\n"]
+exception -> listening [label=" error_done"]
+}
