@@ -274,7 +274,7 @@ class WalkieTalkie:
         self.update_led(False)
 
     # Request replay message from the server
-    def play_latest_user_message(self):
+    def get_latest_user_message(self):
         self.update_status("REPLAYING")
         name = self.recipient
         uuid = self.uuid
@@ -463,7 +463,7 @@ states = [
     },
     {
         "name":"replay",
-        "do": "play_latest_user_message()",
+        "do": "get_latest_user_message()",
         "save_message": "save_message(*)",
     },
     {

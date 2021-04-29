@@ -1,4 +1,5 @@
 import os
+import sys
 import paho.mqtt.client as mqtt
 import logging
 import json
@@ -59,6 +60,7 @@ class WalkieTalkie:
         self._logger.info('Starting Component')
         self.debug = debug
         self.app = None
+        self.message_in_queue = False
 
         self.recorder = Recorder(self)
         self.text_to_speech = Speaker()
@@ -80,8 +82,6 @@ class WalkieTalkie:
         self.stm_driver.add_machine(recognizer_stm)
         self.stm_driver.start()
         self._logger.debug('Component initialization finished')
-        with open("../tmp/patient.gv", "w") as f:
-          f.write(stmpy.get_graphviz_dot(self.stm))
 
     def create_gui(self):
         self.app = gui("Walkie Talkie", "320x568", bg='yellow')
@@ -108,9 +108,6 @@ class WalkieTalkie:
             elif 'replay' in label:
                 self.stm.send("replay")
                 command = "replay"
-            elif 'play' in label:
-                self.stm.send("play")
-                command = "play"
             print("[ACTION]:", command)
             print("[STATE]:", self.stm.state)
         
@@ -122,7 +119,6 @@ class WalkieTalkie:
             self.app.setSticky("news")
             self.app.addButton('Help', on_button_pressed_start)
             self.app.addButton('Stop recording', on_button_pressed_start)
-            self.app.addButton('Play', on_button_pressed_start)
             self.app.addButton('Replay', on_button_pressed_start)
             self.app.stopLabelFrame()
         else:
@@ -252,7 +248,7 @@ class WalkieTalkie:
         self.update_led(False)
 
     # Request replay message from the server
-    def play_latest_user_message(self):
+    def get_latest_user_message(self):
         self.update_status("REPLAYING")
         name = self.recipient
         uuid = self.uuid
@@ -292,8 +288,15 @@ class WalkieTalkie:
                 queue_length = len(os.listdir(queue_folder))
                 if queue_length-queue_pad > 0:
                     self.app.setBgImage("images/bg_green.gif")
+                    self.message_in_queue = True
                 else:
                     self.app.setBgImage("images/bg.gif")
+                    self.message_in_queue = False
+
+    def check_queue(self):
+        if self.message_in_queue:
+            time.sleep(2)
+            self.stm.send("play_message")
 
     def vibrate(self):
         self.recorder.play("vibrate.wav")
@@ -318,7 +321,7 @@ transitions = [
     {
         "source": "listening",
         "target": "playing",
-        "trigger": "play",
+        "trigger": "play_message",
     },
     {
         "source": "playing",
@@ -374,14 +377,14 @@ states = [
     {
         "name":"listening",
         "do": "update_status('LISTENING')",
-        "entry": "update_led(False)",
+        "entry": "update_led(False); check_queue()",
         "register": "register()",
         "update_nurse": "update_nurse(*)",
-        "save_message": "save_message(*)",
+        "save_message": "save_message(*); check_queue()",
     },
     {
         "name":"replay",
-        "do": "play_latest_user_message()",
+        "do": "get_latest_user_message()",
         "save_message": "save_message(*)",
     },
     {
@@ -411,6 +414,7 @@ if len(sys.argv) > 1:
         debug_level = logging.DEBUG
         debug = True
 
+debug_level = logging.DEBUG
 # Logging
 logger = logging.getLogger(__name__)
 logger.setLevel(debug_level)
@@ -421,4 +425,4 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 if __name__ == "__main__":
-    walkie_talkie = WalkieTalkie(transitions, states)
+    walkie_talkie = WalkieTalkie(transitions, states, debug)
