@@ -283,7 +283,8 @@ class WalkieTalkie:
         num = 1
         listdir = os.listdir(queue_folder)
         listdir.sort()
-        self.force_stop()
+        if remove:
+            self.force_stop()
         for filename in listdir:
             if filename.split(".")[0] == "1" and num == 1 and remove:
                 os.remove(f"{queue_folder}/{filename}")
