@@ -267,9 +267,9 @@ class WalkieTalkie:
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
         if self.check_message_queue(2): # if there are more than 2, it is safe to iterate
-            self.iterate_queue()
+            self.iterate_queue(True)
         else:
-            self.iterate_queue()
+            self.iterate_queue(True)
             self.stm.send("queue_empty")
 
     def check_message_queue(self, i): # returns true if there are more than i messages left in queue
@@ -277,13 +277,13 @@ class WalkieTalkie:
             return True
         return False
     
-    def threaded_iterate(self, lock, remove):
+    def threaded_iterate(self, lock, remove, force = False):
         lock.acquire()
         queue_folder = "message_queue"
         num = 1
         listdir = os.listdir(queue_folder)
         listdir.sort()
-        if remove:
+        if force:
             self.force_stop()
         for filename in listdir:
             if filename.split(".")[0] == "1" and num == 1 and remove:
@@ -295,8 +295,8 @@ class WalkieTalkie:
         self.update_led(False)
         lock.release()
 
-    def iterate_queue(self, remove = True):
-        th = Thread(target=self.threaded_iterate, args=[self.lock, remove]);
+    def iterate_queue(self, remove, force = False):
+        th = Thread(target=self.threaded_iterate, args=[self.lock, remove, force]);
         th.start()
         th.join()
 
@@ -382,7 +382,7 @@ transitions = [
         'source': 'playing',
         'target': 'listening',
         'trigger': 'time_out',
-        'effect': 'iterate_queue',
+        'effect': 'iterate_queue(True, False)',
     },
     {
         'source': 'playing',
