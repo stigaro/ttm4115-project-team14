@@ -87,7 +87,7 @@ class WalkieTalkie:
         self.app = gui("Walkie Talkie", "320x568", bg='yellow')
         self.app.setStretch("both")
         self.app.setSticky("")
-        self.app.setBgImage("client/images/bg.gif")
+        self.app.setBgImage("images/bg.gif")
 
         if self.debug == True:
             self.app.setInPadding([30,40])
