@@ -122,7 +122,6 @@ class WalkieTalkie:
             self.app.addButton('Replay', on_button_pressed_start)
             self.app.stopLabelFrame()
         else:
-            self.app.setTransparency(0)
             self.app.addLabel("padding", "", 1, 0)
         self.update_led(False)
         self.update_status('LISTENING')
@@ -190,14 +189,13 @@ class WalkieTalkie:
             wf = payload.get('data')
             data = base64.b64decode(wf)
             # Get queue length and saves message in the FIFO order
-            queue_number = len(os.listdir("message_queue"))+1
+            queue_number = len(os.listdir("message_queue"))
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
             self.update_led(False)
         except:
             self._logger.error(f'Payload could not be read!')
-        self.check_message_queue(1)
 
     def play_replay_message(self, payload):
         try:
@@ -217,7 +215,7 @@ class WalkieTalkie:
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
-        if self.check_message_queue(0):
+        if self.check_message_queue(1):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
@@ -227,7 +225,7 @@ class WalkieTalkie:
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if self.check_message_queue(1): # If not the last message
+        if self.check_message_queue(2): # If not the last message
             self.iterate_queue()
         else:
             self.iterate_queue()
@@ -241,10 +239,11 @@ class WalkieTalkie:
     def iterate_queue(self):
         queue_folder = "message_queue"
         for i, filename in enumerate(os.listdir(queue_folder)):
-            if i == 0:
+            if i == 1:
                 os.remove(f"{queue_folder}/{filename}")
             else:
-                os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
+                if filename != ".gitkeep":                
+                    os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
         self.update_led(False)
 
     # Request replay message from the server
@@ -286,7 +285,7 @@ class WalkieTalkie:
                 # Blink green if there's message in queue
                 queue_folder = "message_queue"
                 queue_length = len(os.listdir(queue_folder))
-                if queue_length-queue_pad > 0:
+                if self.check_message_queue(1+queue_pad):
                     self.app.setBgImage("images/bg_green.gif")
                     self.message_in_queue = True
                 else:
