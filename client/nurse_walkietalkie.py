@@ -370,7 +370,7 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay",
-        "effect": "force_stop()",
+        "effect": "stop_timer('time_out'); force_stop()",
     },
     {
         "source": "playing",
