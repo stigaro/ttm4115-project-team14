@@ -9,7 +9,7 @@ from appJar import gui
 from recognizer import get_state_machine
 from recorder import Recorder
 from stmpy import Driver, Machine
-from threading import Thread
+from threading import Thread, Lock
 from tts import Speaker
 from uuid import uuid4
 import stmpy
@@ -61,6 +61,7 @@ class WalkieTalkie:
         self.debug = debug
         self.app = None
         self.message_in_queue = False
+        self.lock = Lock()
 
         self.recorder = Recorder(self)
         self.text_to_speech = Speaker()
@@ -122,7 +123,6 @@ class WalkieTalkie:
             self.app.addButton('Replay', on_button_pressed_start)
             self.app.stopLabelFrame()
         else:
-            self.app.setTransparency(0)
             self.app.addLabel("padding", "", 1, 0)
         self.update_led()
         self.update_status('LISTENING')
@@ -182,7 +182,8 @@ class WalkieTalkie:
         elif payload.get('data'):
             self.stm.send('replay_save_message', args=[payload])
 
-    def save_message(self, payload):
+    def threaded_save(self, lock, payload):
+        lock.acquire()
         try:
             sender_name = payload.get('device_owner_name_from')
             self.tts(f"Received message from {sender_name}")
@@ -190,10 +191,19 @@ class WalkieTalkie:
             wf = payload.get('data')
             data = base64.b64decode(wf)
             # Get queue length and saves message in the FIFO order
-            queue_number = len(os.listdir("message_queue"))+1
+            queue_number = len(os.listdir("message_queue"))
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
+        except:
+            self._logger.error(f'Payload could not be read!')
+        lock.release()
+        self.iterate_queue(False)
+
+    def save_message(self, payload):
+        th = Thread(target=self.threaded_save, args=[self.lock,payload])
+        th.start()
+        th.join()
             self.update_led()
         except:
             self._logger.error(f'Payload could not be read!')
@@ -216,7 +226,7 @@ class WalkieTalkie:
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
-        if self.check_message_queue(0):
+        if self.check_message_queue(1):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
@@ -226,7 +236,7 @@ class WalkieTalkie:
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if self.check_message_queue(1): # If not the last message
+        if self.check_message_queue(2): # If not the last message
             self.iterate_queue()
         else:
             self.iterate_queue()
@@ -237,12 +247,26 @@ class WalkieTalkie:
             return True
         return False
 
-    def iterate_queue(self):
+    def threaded_iterate(self, lock, remove):
+        lock.acquire()
         queue_folder = "message_queue"
-        for i, filename in enumerate(os.listdir(queue_folder)):
-            if i == 0:
+        num = 1
+        listdir = os.listdir(queue_folder)
+        listdir.sort()
+        for filename in listdir:
+            if filename.split(".")[0] == "1" and num == 1 and remove:
                 os.remove(f"{queue_folder}/{filename}")
             else:
+                if filename != ".gitkeep":
+                    os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{num}.wav")
+                    num += 1
+        self.update_led(False)
+        lock.release()
+
+    def iterate_queue(self, remove = True):
+        th = Thread(target=self.threaded_iterate, args=[self.lock, remove]);
+        th.start()
+        th.join()
                 os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
         self.update_led()
 
@@ -279,10 +303,16 @@ class WalkieTalkie:
 
     def update_led(self, queue_pad = 0):
         if self.app != None:
-            if self.check_message_queue(queue_pad): # check if there are more than 0 (default) messages in queue
-                    self.app.setBgImage("images/bg_green.gif")
+            if is_error:
+                self.app.setBgImage("images/bg_red.gif")
             else:
-                self.app.setBgImage("images/bg.gif")
+                # Blink green if there's message in queue
+                queue_folder = "message_queue"
+                queue_length = len(os.listdir(queue_folder))
+                if self.check_message_queue(1+queue_pad): # check if there are more than 1 (default) messages in queue
+                    self.app.setBgImage("images/bg_green.gif")
+                else:
+                    self.app.setBgImage("images/bg.gif")
 
     def check_queue(self):
         if self.check_message_queue(0): # check if there are more than 0 messages in queue
@@ -389,7 +419,7 @@ states = [
         "do": "play_message()",
         "entry": "stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
-        "save_message": "save_message(*); save_message(*)",
+        "save_message": "save_message(*)",
     },
     {
         "name": "recording",
