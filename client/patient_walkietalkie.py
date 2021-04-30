@@ -304,7 +304,7 @@ class WalkieTalkie:
                 self.app.setBgImage("images/bg.gif")
 
     def check_queue(self):
-        if self.check_message_queue(0): # check if there are more than 0 messages in queue
+        if self.check_message_queue(1): # check if there are more than 0 messages in queue
             time.sleep(3)
             self.stm.send("play_message")
 
