@@ -18,7 +18,8 @@ class Recognizer:
         'send',
         'replay',
         'next',
-        'play'
+        'play',
+        'continue',
     ]
 
     def __init__(self, recognition_keyword='communicator', stm_observers=[]):
@@ -39,6 +40,7 @@ class Recognizer:
         action_word_index = 0
         for action_word in Recognizer.recognizable_action_words:
             action_word_index = recognition_string.find(action_word)
+            print(action_word, recognition_string)
             if action_word_index != -1:
                 recognized_action_word = action_word.replace(" ", "_")
                 break
@@ -65,6 +67,8 @@ class Recognizer:
         # Update all observers with action
         for stm_observer in self.stm_observers:
             try:
+                if (recognition_dictionary['action'] == "continue"):
+                    recognition_dictionary['action'] = "next"
                 self.stm.driver.send(recognition_dictionary['action'], stm_observer, kwargs=recognition_dictionary)
             except Exception:
                 print("WARNING; Recognizer raised exception when sending to observer")
