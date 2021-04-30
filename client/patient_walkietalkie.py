@@ -204,9 +204,6 @@ class WalkieTalkie:
         th = Thread(target=self.threaded_save, args=[self.lock,payload])
         th.start()
         th.join()
-            self.update_led()
-        except:
-            self._logger.error(f'Payload could not be read!')
 
     def play_replay_message(self, payload):
         try:
