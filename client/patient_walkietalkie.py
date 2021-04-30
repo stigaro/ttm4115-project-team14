@@ -204,9 +204,6 @@ class WalkieTalkie:
         th = Thread(target=self.threaded_save, args=[self.lock,payload])
         th.start()
         th.join()
-            self.update_led()
-        except:
-            self._logger.error(f'Payload could not be read!')
 
     def play_replay_message(self, payload):
         try:
@@ -267,8 +264,6 @@ class WalkieTalkie:
         th = Thread(target=self.threaded_iterate, args=[self.lock, remove]);
         th.start()
         th.join()
-                os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
-        self.update_led()
 
     # Request replay message from the server
     def get_latest_user_message(self):
@@ -303,16 +298,10 @@ class WalkieTalkie:
 
     def update_led(self, queue_pad = 0):
         if self.app != None:
-            if is_error:
-                self.app.setBgImage("images/bg_red.gif")
+            if self.check_message_queue(1+queue_pad): # check if there are more than 1 (default) messages in queue
+                self.app.setBgImage("images/bg_green.gif")
             else:
-                # Blink green if there's message in queue
-                queue_folder = "message_queue"
-                queue_length = len(os.listdir(queue_folder))
-                if self.check_message_queue(1+queue_pad): # check if there are more than 1 (default) messages in queue
-                    self.app.setBgImage("images/bg_green.gif")
-                else:
-                    self.app.setBgImage("images/bg.gif")
+                self.app.setBgImage("images/bg.gif")
 
     def check_queue(self):
         if self.check_message_queue(0): # check if there are more than 0 messages in queue
