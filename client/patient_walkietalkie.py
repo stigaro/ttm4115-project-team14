@@ -124,7 +124,7 @@ class WalkieTalkie:
         else:
             self.app.setTransparency(0)
             self.app.addLabel("padding", "", 1, 0)
-        self.update_led(False)
+        self.update_led()
         self.update_status('LISTENING')
         self.app.go()
 
@@ -194,10 +194,9 @@ class WalkieTalkie:
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
-            self.update_led(False)
+            self.update_led()
         except:
             self._logger.error(f'Payload could not be read!')
-        self.check_message_queue(1)
 
     def play_replay_message(self, payload):
         try:
@@ -221,7 +220,7 @@ class WalkieTalkie:
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
-            self.update_led(False,1)
+            self.update_led(1)
         else:
             self.stm.send("queue_empty")
     
@@ -245,7 +244,7 @@ class WalkieTalkie:
                 os.remove(f"{queue_folder}/{filename}")
             else:
                 os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
-        self.update_led(False)
+        self.update_led()
 
     # Request replay message from the server
     def get_latest_user_message(self):
@@ -278,23 +277,15 @@ class WalkieTalkie:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error,queue_pad = 0):
+    def update_led(self, queue_pad = 0):
         if self.app != None:
-            if is_error:
-                self.app.setBgImage("images/bg_red.gif")
-            else:
-                # Blink green if there's message in queue
-                queue_folder = "message_queue"
-                queue_length = len(os.listdir(queue_folder))
-                if queue_length-queue_pad > 0:
+            if self.check_message_queue(queue_pad): # check if there are more than 0 (default) messages in queue
                     self.app.setBgImage("images/bg_green.gif")
-                    self.message_in_queue = True
-                else:
-                    self.app.setBgImage("images/bg.gif")
-                    self.message_in_queue = False
+            else:
+                self.app.setBgImage("images/bg.gif")
 
     def check_queue(self):
-        if self.message_in_queue:
+        if self.check_message_queue(0): # check if there are more than 0 messages in queue
             time.sleep(3)
             self.stm.send("play_message")
 
@@ -377,7 +368,7 @@ states = [
     {
         "name":"listening",
         "do": "update_status('LISTENING')",
-        "entry": "update_led(False); check_queue()",
+        "entry": "update_led(); check_queue()",
         "register": "register()",
         "update_nurse": "update_nurse(*)",
         "save_message": "save_message(*); check_queue()",
