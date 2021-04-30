@@ -258,7 +258,7 @@ class WalkieTalkie:
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if self.check_message_queue(2): # if there are more than 1, it is safe to iterate
+        if self.check_message_queue(2): # if there are more than 2, it is safe to iterate
             self.iterate_queue()
         else:
             self.iterate_queue()
