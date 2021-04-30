@@ -369,6 +369,7 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay",
+        "effect": "force_stop()",
     },
     {
         "source": "playing",
@@ -497,7 +498,7 @@ states = [
     {
         "name":"playing",
         "do": "play_message()",
-        "entry": "force_stop(); stop_timer('time_out')",
+        "entry": "stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
         "save_message": "save_message(*)",
     },
