@@ -38,11 +38,11 @@ class Recognizer:
         recognized_action_word = None
         action_word_index = 0
         for action_word in Recognizer.recognizable_action_words:
-            print(action_word, recognition_string)
             action_word_index = recognition_string.find(action_word)
             if action_word_index != -1:
                 recognized_action_word = action_word.replace(" ", "_")
                 break
+        print(recognition_string)
 
         recognition_argument = ""
         # Splits the string into arguments by keyword reduction function definition
@@ -80,7 +80,7 @@ class Recognizer:
         return 'listening'
 
     def listen(self):
-        print("\n\n[LISTENING]: Listening for audio")
+        print("\n[LISTENING]: Listening for audio")
         with self.microphone as microphone:
             self.speech_converter.adjust_for_ambient_noise(microphone)
             self.audio = self.speech_converter.listen(microphone)

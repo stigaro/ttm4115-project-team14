@@ -44,14 +44,9 @@ class Recorder:
 
         self.app.go()
 
-    def callback(input_data, frame_count, time_info, flags):
-        print(input_data)
-        return (input_data, pyaudio.paContinue)
-
     def is_silent(self, data):
         # Returns "True" if data is below the "silent" threshold
         as_ints = array("h", data)
-        #print(max(as_ints))
         return max(as_ints) < 1000
 
     def record(self):
@@ -123,7 +118,7 @@ class Recorder:
         while data != b'':
             stream.write(data)
             data = wf.readframes(chunk)
-            print(data)
+            # print(data)
 
         # Close and terminate the stream and the PortAudio interface
         stream.close()
