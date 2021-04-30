@@ -217,7 +217,6 @@ class WalkieTalkie:
             data = base64.b64decode(wf)
             # Get queue length and saves message in the FIFO order
             queue_number = len(os.listdir("message_queue"))
-            print("QUEUE", queue_number)
             with open(f'message_queue/{queue_number}.wav', 'wb') as fil:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
@@ -253,13 +252,13 @@ class WalkieTalkie:
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
-            self.update_led(False,1)
+            self.update_led(False, 1)
         else:
             self.stm.send("queue_empty")
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if self.check_message_queue(2): # If not the last message
+        if self.check_message_queue(2): # if there are more than 1, it is safe to iterate
             self.iterate_queue()
         else:
             self.iterate_queue()
@@ -281,7 +280,6 @@ class WalkieTalkie:
                 os.remove(f"{queue_folder}/{filename}")
             else:
                 if filename != ".gitkeep":
-                    print(filename, num)
                     os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{num}.wav")
                     num += 1
         self.update_led(False)
@@ -323,13 +321,12 @@ class WalkieTalkie:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error,queue_pad = 0):
+    def update_led(self,is_error, queue_pad = 0):
         if self.app != None:
             if is_error:
                 self.app.setBgImage("images/bg_red.gif")
             else:
-                # Blink green if there's message in queue
-                if self.check_message_queue(1+queue_pad):
+                if self.check_message_queue(1+queue_pad): # check if there are more than 1 messages in queue
                     self.app.setBgImage("images/bg_green.gif")
                 else:
                     self.app.setBgImage("images/bg.gif")
