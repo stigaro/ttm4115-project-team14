@@ -16,6 +16,7 @@ class Recorder:
         self.fs = 44100  # Record at 44100 samples per second
         self.filename = "output.wav"
         self.p = pyaudio.PyAudio()
+        self.playing = False
 
     def create_gui(self):
         self.app = gui()
@@ -98,7 +99,12 @@ class Recorder:
         print("[ACTION]: stop")
         self.recording = False
 
+    def force_stop(self):
+        print("[ACTION]: replay")
+        self.playing = False
+
     def play(self, filename):
+        self.playing = True
         # filename = 'output.wav'
         # Set chunk size of 1024 samples per data frame
         chunk = 1024
@@ -115,7 +121,7 @@ class Recorder:
         # Read data in chunks
         data = wf.readframes(chunk)
         # Play the sound by writing the audio data to the stream
-        while data != b'':
+        while data != b'' and self.playing:
             stream.write(data)
             data = wf.readframes(chunk)
             # print(data)
@@ -123,6 +129,7 @@ class Recorder:
         # Close and terminate the stream and the PortAudio interface
         stream.close()
         p.terminate()
+        self.playing = True
 
 if __name__ == "__main__":
     recorder = Recorder(None)

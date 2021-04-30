@@ -157,6 +157,13 @@ class WalkieTalkie:
         th.start()
         self._logger.debug(text)
 
+    def force_stop(self):
+        while (not self.recorder.playing):
+            pass
+        self.recorder.force_stop()
+        while (not self.recorder.playing):
+            pass
+
     def register(self):
         msg = {
             "command":"register",
@@ -276,6 +283,7 @@ class WalkieTalkie:
         num = 1
         listdir = os.listdir(queue_folder)
         listdir.sort()
+        self.force_stop()
         for filename in listdir:
             if filename.split(".")[0] == "1" and num == 1 and remove:
                 os.remove(f"{queue_folder}/{filename}")
@@ -361,7 +369,6 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay",
-        "effect": "stop_timer('time_out')",
     },
     {
         "source": "playing",
@@ -490,7 +497,7 @@ states = [
     {
         "name":"playing",
         "do": "play_message()",
-        "entry": "stop_timer('time_out')",
+        "entry": "force_stop(); stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
         "save_message": "save_message(*)",
     },
