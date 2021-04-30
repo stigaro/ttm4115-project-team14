@@ -110,7 +110,6 @@ class ServerStm:
                     raise ValueError('uuid not found')
                 # Save message to database
                 data = self.payload.get('data')
-                self._logger.debug(f'{sender}, {receiver}, {data}')
                 wf = base64.b64decode(data)
                 with open(f'stored_messages/{sender}-{receiver}.wav', 'wb') as fil:
                     fil.write(wf)
@@ -135,14 +134,15 @@ class ServerStm:
                     payload = {"device_owner_name_from": sender_name, "device_id_to": receiver, "command": "reply", "data": ""}
                     self.response_message = json.dumps(payload)
                     self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
-                    raise ValueError('Stored replay message not found!')
-                wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
-                self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
-                data = base64.b64encode(wf.read())
-                # Send message back to sender
-                payload = {"device_owner_name_from": sender_name, "device_id_to": receiver, "command": "reply", "data": data.decode()}
-                self.response_message = json.dumps(payload)
-                self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
+                    self._logger.debug(f'{sender}')
+                else:
+                    wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
+                    self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')
+                    data = base64.b64encode(wf.read())
+                    # Send message back to sender
+                    payload = {"device_owner_name_from": sender_name, "device_id_to": receiver, "command": "reply", "data": data.decode()}
+                    self.response_message = json.dumps(payload)
+                    self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
             elif command == "register": # {"uuid": uuid, "name": name, "command": "register"}
                 # Get uuid and name from request
                 uuid = self.payload.get("uuid")
