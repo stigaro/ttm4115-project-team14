@@ -269,11 +269,10 @@ class WalkieTalkie:
     # Request replay message from the server
     def get_latest_user_message(self):
         self.update_status("REPLAYING")
-        name = self.recipient
         uuid = self.uuid
         msg = {
             "device_id_from": uuid,
-            "device_owner_name_to": name,
+            "device_owner_name_to": self.nurse,
             "command":"replay",
         }
         json_msg = json.dumps(msg)
