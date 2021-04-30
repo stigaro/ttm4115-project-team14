@@ -158,11 +158,11 @@ class WalkieTalkie:
         self._logger.debug(text)
 
     def force_stop(self):
-        while (not self.recorder.playing):
-            pass
-        self.recorder.force_stop()
-        while (not self.recorder.playing):
-            pass
+        if self.recorder.playing:
+            self.recorder.force_stop()
+            while (not self.recorder.terminated):
+                pass
+
 
     def register(self):
         msg = {
@@ -267,9 +267,9 @@ class WalkieTalkie:
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
         if self.check_message_queue(2): # if there are more than 2, it is safe to iterate
-            self.iterate_queue(True)
+            self.iterate_queue(True, True)
         else:
-            self.iterate_queue(True)
+            self.iterate_queue(True, True)
             self.stm.send("queue_empty")
 
     def check_message_queue(self, i): # returns true if there are more than i messages left in queue
@@ -277,7 +277,7 @@ class WalkieTalkie:
             return True
         return False
     
-    def threaded_iterate(self, lock, remove, force = False):
+    def threaded_iterate(self, lock, remove, force):
         lock.acquire()
         queue_folder = "message_queue"
         num = 1
@@ -296,7 +296,7 @@ class WalkieTalkie:
         lock.release()
 
     def iterate_queue(self, remove, force = False):
-        th = Thread(target=self.threaded_iterate, args=[self.lock, remove, force]);
+        th = Thread(target=self.threaded_iterate, args=[self.lock, remove, force])
         th.start()
         th.join()
 
@@ -370,7 +370,7 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay",
-        "effect": "stop_timer('time_out'); force_stop()",
+        "effect": "force_stop()",
     },
     {
         "source": "playing",
@@ -382,7 +382,7 @@ transitions = [
         'source': 'playing',
         'target': 'listening',
         'trigger': 'time_out',
-        'effect': 'iterate_queue(True, False)',
+        'effect': 'iterate_queue(True)',
     },
     {
         'source': 'playing',

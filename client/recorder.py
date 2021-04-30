@@ -17,6 +17,7 @@ class Recorder:
         self.filename = "output.wav"
         self.p = pyaudio.PyAudio()
         self.playing = False
+        self.terminated = True
 
     def create_gui(self):
         self.app = gui()
@@ -104,6 +105,7 @@ class Recorder:
         self.playing = False
 
     def play(self, filename):
+        self.terminated = False
         self.playing = True
         # filename = 'output.wav'
         # Set chunk size of 1024 samples per data frame
@@ -129,7 +131,8 @@ class Recorder:
         # Close and terminate the stream and the PortAudio interface
         stream.close()
         p.terminate()
-        self.playing = True
+        self.playing = False
+        self.terminated = True
 
 if __name__ == "__main__":
     recorder = Recorder(None)
