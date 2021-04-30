@@ -246,7 +246,7 @@ class WalkieTalkie:
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
-            self.update_led(False)
+            self.update_led(False, 1)
         else:
             self.stm.send("queue_empty")
     
