@@ -223,7 +223,6 @@ class WalkieTalkie:
             self.update_led(False)
         except:
             self._logger.error(f'Payload could not be read!')
-        self.check_message_queue(1)
 
     def play_replay_message(self, payload):
         try:
@@ -247,13 +246,13 @@ class WalkieTalkie:
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
             self.stm.send('message_played')
-            self.update_led(False,1)
+            self.update_led(False)
         else:
             self.stm.send("queue_empty")
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if self.check_message_queue(1): # If not the last message
+        if self.check_message_queue(1): # if there are more than 1, it is safe to iterate
             self.iterate_queue()
         else:
             self.iterate_queue()
@@ -304,15 +303,13 @@ class WalkieTalkie:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error,queue_pad = 0):
+    def update_led(self,is_error):
         if self.app != None:
             if is_error:
                 self.app.setBgImage("images/bg_red.gif")
             else:
                 # Blink green if there's message in queue
-                queue_folder = "message_queue"
-                queue_length = len(os.listdir(queue_folder))
-                if queue_length-queue_pad > 0:
+                if self.check_message_queue(0): # check if there are more than 0 messages in queue
                     self.app.setBgImage("images/bg_green.gif")
                 else:
                     self.app.setBgImage("images/bg.gif")
