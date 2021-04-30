@@ -179,7 +179,7 @@ class WalkieTalkie:
             self.stm.send('update_nurse', args=[payload])
         elif payload.get('command') == "message":
             self.stm.send("save_message", args=[payload])
-        elif payload.get('data'):
+        elif payload.get('command') == "reply":
             self.stm.send('replay_save_message', args=[payload])
 
     def threaded_save(self, lock, payload):
