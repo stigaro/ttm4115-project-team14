@@ -132,6 +132,9 @@ class ServerStm:
                     raise ValueError('uuid not found')
                 # Retreive message from database
                 if not os.path.exists(f"stored_messages/{receiver}-{sender}.wav"):
+                    payload = {"device_owner_name_from": sender_name, "device_id_to": receiver, "command": "reply", "data": ""}
+                    self.response_message = json.dumps(payload)
+                    self.mqtt_topic_output = MQTT_TOPIC_OUTPUT+str(sender)
                     raise ValueError('Stored replay message not found!')
                 wf = open(f'stored_messages/{receiver}-{sender}.wav', 'rb')
                 self._logger.debug(f'Retrieved message from /stored_messages/{receiver}-{sender}.wav to be replayed')

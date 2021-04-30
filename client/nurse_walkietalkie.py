@@ -242,6 +242,7 @@ class WalkieTalkie:
             self.stm.send("replay_finished")
         except: # Should never happen, but added as insurance so the program doesn't throw an error and stops
             self._logger.error(f'Payload could not be read!')
+            self.stm.send("replay_finished")
     
     def play_message(self):
         self.update_status("PLAYING")
