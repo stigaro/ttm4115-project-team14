@@ -303,13 +303,13 @@ class WalkieTalkie:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error):
+    def update_led(self,is_error, queue_pad = 0):
         if self.app != None:
             if is_error:
                 self.app.setBgImage("images/bg_red.gif")
             else:
                 # Blink green if there's message in queue
-                if self.check_message_queue(0): # check if there are more than 0 messages in queue
+                if self.check_message_queue(queue_pad): # check if there are more than 0 messages in queue
                     self.app.setBgImage("images/bg_green.gif")
                 else:
                     self.app.setBgImage("images/bg.gif")

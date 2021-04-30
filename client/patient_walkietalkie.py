@@ -233,7 +233,7 @@ class WalkieTalkie:
             self.stm.send("queue_empty")
 
     def check_message_queue(self, i): # returns true if there are more than i messages left in queue
-        if len(os.listdir("client/message_queue")) > i:
+        if len(os.listdir("message_queue")) > i:
             return True
         return False
 
@@ -280,9 +280,9 @@ class WalkieTalkie:
     def update_led(self, queue_pad = 0):
         if self.app != None:
             if self.check_message_queue(queue_pad): # check if there are more than 0 (default) messages in queue
-                    self.app.setBgImage("client/images/bg_green.gif")
+                    self.app.setBgImage("images/bg_green.gif")
             else:
-                self.app.setBgImage("client/images/bg.gif")
+                self.app.setBgImage("images/bg.gif")
 
     def check_queue(self):
         if self.check_message_queue(0): # check if there are more than 0 messages in queue
