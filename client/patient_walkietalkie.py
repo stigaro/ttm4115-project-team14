@@ -194,6 +194,7 @@ class WalkieTalkie:
                 fil.write(data)
                 self._logger.debug(f'Message saved to /message_queue/{queue_number}.wav')
             self.update_led(False)
+            self.iterate_queue(False)
         except:
             self._logger.error(f'Payload could not be read!')
 
@@ -236,14 +237,16 @@ class WalkieTalkie:
             return True
         return False
 
-    def iterate_queue(self):
+    def iterate_queue(self, remove = True):
         queue_folder = "message_queue"
-        for i, filename in enumerate(os.listdir(queue_folder)):
-            if i == 1:
+        num = 1
+        for filename in os.listdir(queue_folder):
+            if filename.split(".")[0] == "1" and remove:
                 os.remove(f"{queue_folder}/{filename}")
             else:
                 if filename != ".gitkeep":                
-                    os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{i}.wav")
+                    os.rename(f"{queue_folder}/{filename}", f"{queue_folder}/{num}.wav")
+                    num += 1
         self.update_led(False)
 
     # Request replay message from the server
@@ -397,7 +400,7 @@ states = [
         "do": "play_message()",
         "entry": "stop_timer('time_out')",
         "message_played": "start_timer('time_out',3000)",
-        "save_message": "save_message(*); save_message(*)",
+        "save_message": "save_message(*)",
     },
     {
         "name": "recording",
