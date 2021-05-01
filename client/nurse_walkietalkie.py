@@ -62,13 +62,14 @@ class WalkieTalkie:
         self.lock = Lock()
         self.recorder = Recorder(self)
         self.text_to_speech = Speaker()
+        self.overwrote_last = False
 
         self.uuid = uuid4().hex
         if self.debug:
             self.uuid = "122ec9e8edda48f8a6dd290747acfa8c"
         self.channel = "{server}{uuid}".format(server=MQTT_TOPIC_BASE,uuid=self.uuid)
 
-        self.name = "christopher"
+        self.name = "jonas"
         stm_walkie_talkie_name = "{}_walkie_talkie".format(self.name)
         walkie_talkie_machine = Machine(transitions=transitions, states=states, obj=self, name=stm_walkie_talkie_name)
         self.stm = walkie_talkie_machine
@@ -163,7 +164,6 @@ class WalkieTalkie:
             while (not self.recorder.terminated):
                 pass
 
-
     def register(self):
         msg = {
             "command":"register",
@@ -250,23 +250,29 @@ class WalkieTalkie:
         except: # Should never happen, but added as insurance so the program doesn't throw an error and stops
             self._logger.error(f'Payload could not be read!')
             self.stm.send("replay_finished")
-    
+
+    def print_timer(self):
+        print(self.stm.get_timer('time_out'))
+
     def play_message(self):
         self.update_status("PLAYING")
+        self.overwrote_last = False
+
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
         if self.check_message_queue(1):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
-            self.stm.send('message_played')
-            self.update_led(False, 1)
+            if not self.overwrote_last:
+                self.stm.send('message_played')
+                self.update_led(False, 1)
         else:
             self.stm.send("queue_empty")
     
     def load_next_message_in_queue(self):
         # Iterates queue in FIFO order deleting the first file and shifting the filenames to the left
-        if self.check_message_queue(2): # if there are more than 2, it is safe to iterate
+        if self.check_message_queue(2):  # if there are more than 2, it is safe to iterate
             self.iterate_queue(True, True)
         else:
             self.iterate_queue(True, True)
@@ -277,14 +283,12 @@ class WalkieTalkie:
             return True
         return False
     
-    def threaded_iterate(self, lock, remove, force):
+    def threaded_iterate(self, lock, remove):
         lock.acquire()
         queue_folder = "message_queue"
         num = 1
         listdir = os.listdir(queue_folder)
         listdir.sort()
-        if force:
-            self.force_stop()
         for filename in listdir:
             if filename.split(".")[0] == "1" and num == 1 and remove:
                 os.remove(f"{queue_folder}/{filename}")
@@ -295,8 +299,10 @@ class WalkieTalkie:
         self.update_led(False)
         lock.release()
 
-    def iterate_queue(self, remove, force = False):
-        th = Thread(target=self.threaded_iterate, args=[self.lock, remove, force])
+    def iterate_queue(self, remove, force=False):
+        if force:
+            self.overwrite_current_playing()
+        th = Thread(target=self.threaded_iterate, args=[self.lock, remove])
         th.start()
         th.join()
 
@@ -331,7 +337,7 @@ class WalkieTalkie:
             label = "State:"+text
             self.app.setLabel("status", label)
 
-    def update_led(self,is_error, queue_pad = 0):
+    def update_led(self, is_error, queue_pad=0):
         if self.app != None:
             if is_error:
                 self.app.setBgImage("images/bg_red.gif")
@@ -351,7 +357,11 @@ class WalkieTalkie:
         # stop the state machine Driver
         self.stm_driver.stop()
 
-    
+    def overwrite_current_playing(self):
+        self.overwrote_last = True
+        self.force_stop()
+
+
 # TRANSITIONS
 transitions = [
     # Initial
@@ -370,7 +380,7 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay",
-        "effect": "force_stop()",
+        "effect": "overwrite_current_playing()",
     },
     {
         "source": "playing",
@@ -498,9 +508,10 @@ states = [
     },
     {
         "name":"playing",
-        "do": "play_message()",
         "entry": "stop_timer('time_out')",
-        "message_played": "start_timer('time_out',3000)",
+        "do": "play_message()",
+        "message_played": "start_timer('time_out', 3000)",
+        "exit": "stop_timer('time_out')",
         "save_message": "save_message(*)",
     },
     {

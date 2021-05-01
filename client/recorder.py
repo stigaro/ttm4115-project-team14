@@ -131,6 +131,8 @@ class Recorder:
         # Close and terminate the stream and the PortAudio interface
         stream.close()
         p.terminate()
+        wf.close()
+
         self.playing = False
         self.terminated = True
 

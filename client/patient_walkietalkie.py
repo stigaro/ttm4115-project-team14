@@ -61,6 +61,7 @@ class WalkieTalkie:
         self.debug = debug
         self.app = None
         self.message_in_queue = False
+        self.overwrote_last  = False
         self.lock = Lock()
 
         self.recorder = Recorder(self)
@@ -222,14 +223,17 @@ class WalkieTalkie:
     
     def play_message(self):
         self.update_status("PLAYING")
+        self.overwrote_last = False
+
         # Check queue length
         queue_folder = "message_queue"
         queue_length = len(os.listdir(queue_folder))
         if self.check_message_queue(1):
             self._logger.info(f'Playing message 1/{queue_length}!')
             self.recorder.play(f"{queue_folder}/1.wav")
-            self.stm.send('message_played')
-            self.update_led(1)
+            if not self.overwrote_last:
+                self.stm.send('message_played')
+                self.update_led(1)
         else:
             self.stm.send("queue_empty")
     
@@ -262,7 +266,7 @@ class WalkieTalkie:
         self.update_led(False)
         lock.release()
 
-    def iterate_queue(self, remove = True):
+    def iterate_queue(self, remove=True):
         th = Thread(target=self.threaded_iterate, args=[self.lock, remove]);
         th.start()
         th.join()
@@ -319,7 +323,10 @@ class WalkieTalkie:
         # stop the state machine Driver
         self.stm_driver.stop()
 
-    
+    def overwrite_current_playing(self):
+        self.overwrote_last = True
+        self.force_stop()
+
 # TRANSITIONS
 transitions = [
     # Initial
@@ -338,7 +345,7 @@ transitions = [
         "source": "playing",
         "target": "playing",
         "trigger": "replay",
-        "effect": "stop_timer('time_out')",
+        "effect": "overwrite_current_playing()",
     },
     {
         "source": "playing",
@@ -406,9 +413,10 @@ states = [
     },
     {
         "name":"playing",
-        "do": "play_message()",
         "entry": "stop_timer('time_out')",
+        "do": "play_message()",
         "message_played": "start_timer('time_out',3000)",
+        "exit": "stop_timer('time_out')",
         "save_message": "save_message(*)",
     },
     {
