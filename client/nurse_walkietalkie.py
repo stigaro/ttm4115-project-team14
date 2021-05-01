@@ -161,7 +161,7 @@ class WalkieTalkie:
     def force_stop(self):
         if self.recorder.playing:
             self.recorder.force_stop()
-            while (not self.recorder.terminated):
+            while not self.recorder.terminated:
                 pass
 
     def register(self):

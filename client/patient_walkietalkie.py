@@ -327,6 +327,12 @@ class WalkieTalkie:
         self.overwrote_last = True
         self.force_stop()
 
+    def force_stop(self):
+        if self.recorder.playing:
+            self.recorder.force_stop()
+            while not self.recorder.terminated:
+                pass
+
 # TRANSITIONS
 transitions = [
     # Initial
