@@ -23,17 +23,22 @@ pip install -r requirements.txt
 
 2. Start up the server by running
 ```sh
-python ./server/server.py
+cd ./server
+python server.py
 ```
 
 3. Start up the client by running either `nurse_walkietalkie.py` or `patient_walkietalkie.py`
 ```sh
-python ./client/nurse_walkietalkie.py
+cd ./client
+python nurse_walkietalkie.py
 ```
 
-This will run both the server and the client, pressing `CTRL+C` in the terminal will exit both processes
+This will run both the server and the client, pressing `CTRL+C` in the terminal will exit the processes
 
 The Walkie talkies can be runned with the options `-d` or `--debug` for debugging
+```sh
+python nurse_walkietalkie.py --debug
+```
 
 ## Usage
 
@@ -43,11 +48,19 @@ The codeword used to communicate with the walkie talkie is set to `Lisa` and the
 
 ### Keywords
 
-| Command       | Description                                          | Nurse | Patient |
-|---------------|------------------------------------------------------|-------|---------|
-| send <name>   | Send message to <name>                               | yes   |         |
-| replay <name> | Request replay of the latest message from the server | yes   |         |
-| play          | Play the messages in queue                           | yes   |         |
-| replay        | Replay the message played in queue                   | yes   | yes     |
-| next          | Iterate through the message queue                    | yes   |         |
-| help          | Send message to a randomly assigned nurse            |       | yes     |
+| Command        | Description                                          | Nurse | Patient |
+|----------------|------------------------------------------------------|-------|---------|
+| send <name>    | Send message to <name>                               | yes   |         |
+| replay <name>  | Request replay of the latest message from the server | yes   |         |
+| play           | Play the messages in queue                           | yes   |         |
+| replay         | Replay the message played in queue                   | yes   | yes     |
+| next, continue | Iterate through the message queue                    | yes   |         |
+| help           | Send message to a randomly assigned nurse            |       | yes     |
+
+### Example usages
+- `Lisa send Patient`
+- `Lisa send Bob Ross`
+- `Lisa replay Patient`
+- `Lisa play`
+- `Lisa next`
+- `Lisa help`
